@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf /home/zin/Downloads/proxpex-prototype/proxpex/app/owner)",
+      "Bash(mkdir -p /home/zin/Downloads/proxpex-prototype/proxpex/app/api/update-user /home/zin/Downloads/proxpex-prototype/proxpex/app/api/delete-user /home/zin/Downloads/proxpex-prototype/proxpex/app/api/reset-password)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/admin)",
+      "Bash(kill -9 55530 56314)",
+      "Bash(npm run *)"
+    ]
+  }
+}

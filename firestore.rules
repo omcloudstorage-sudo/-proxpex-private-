@@ -1,0 +1,104 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // --- users ---
+    match /users/{uid} {
+      allow read: if signedIn() && (
+        request.auth.uid == uid ||
+        resource.data.companyId == me().companyId
+      );
+      // Self-creation only happens for the Admin signup flow (role must be 'admin').
+      // PM/Client accounts are created server-side via the Admin SDK, which bypasses rules.
+      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'admin';
+      allow update, delete: if false;
+    }
+
+    // --- companies ---
+    match /companies/{companyId} {
+      // A Company Admin can read their own company (to check their own
+      // approval status). Only the Platform Owner can list every company
+      // or change a company's status.
+      allow read: if signedIn() && (me().companyId == companyId || me().role == 'platform_owner');
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && request.resource.data.status == 'pending';
+      allow update: if signedIn() && me().role == 'platform_owner';
+      allow delete: if false;
+    }
+
+    // --- projects ---
+    match /projects/{projectId} {
+      allow read: if signedIn() && (
+        me().companyId == resource.data.companyId ||
+        request.auth.uid == resource.data.pmId ||
+        request.auth.uid == resource.data.clientId
+      );
+      allow create: if signedIn() && me().role == 'admin' && me().companyId == request.resource.data.companyId;
+      allow update: if signedIn() && (
+        (me().role == 'admin' && me().companyId == resource.data.companyId) ||
+        (me().role == 'pm' && request.auth.uid == resource.data.pmId) ||
+        (me().role == 'team_member' && me().pmId == resource.data.pmId)
+      );
+      allow delete: if signedIn() && me().role == 'admin' && me().companyId == resource.data.companyId;
+
+      // --- MOM entries (subcollection) ---
+      // Only Admin or the assigned PM may create/edit. Once status flips to
+      // 'approved' (only the assigned Client can do that, via update), the
+      // resource.data.status != 'approved' guard blocks every further
+      // update AND delete for everyone, including Admin — permanent lock,
+      // enforced here, not just hidden in the UI.
+      match /momEntries/{momId} {
+        function project() {
+          return get(/databases/$(database)/documents/projects/$(projectId)).data;
+        }
+        function canManageProject() {
+          return (me().role == 'admin' && me().companyId == project().companyId) ||
+                 (me().role == 'pm' && request.auth.uid == project().pmId);
+        }
+
+        allow read: if signedIn() && (
+          me().companyId == project().companyId ||
+          request.auth.uid == project().pmId ||
+          request.auth.uid == project().clientId
+        );
+        allow create: if signedIn() && canManageProject() && request.resource.data.status == 'draft';
+        allow update: if signedIn() && resource.data.status != 'approved' && (
+          canManageProject() ||
+          (me().role == 'client' && request.auth.uid == project().clientId &&
+            resource.data.status == 'pending' && request.resource.data.status == 'approved')
+        );
+        allow delete: if signedIn() && resource.data.status != 'approved' && canManageProject();
+      }
+
+      // --- Audit log (subcollection) ---
+      // Append-only: create is allowed for anyone with project access, but
+      // update and delete are hard-blocked for everyone, no exceptions —
+      // there is no role check on those two lines on purpose.
+      match /auditLog/{logId} {
+        function project() {
+          return get(/databases/$(database)/documents/projects/$(projectId)).data;
+        }
+
+        allow read: if signedIn() && (
+          me().companyId == project().companyId ||
+          request.auth.uid == project().pmId ||
+          request.auth.uid == project().clientId
+        );
+        allow create: if signedIn() && request.resource.data.actorId == request.auth.uid && (
+          me().companyId == project().companyId ||
+          request.auth.uid == project().pmId ||
+          request.auth.uid == project().clientId
+        );
+        allow update, delete: if false;
+      }
+    }
+  }
+}
