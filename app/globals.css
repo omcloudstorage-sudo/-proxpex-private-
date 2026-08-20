@@ -2,9 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --color-ink: 15 23 42;
+  --color-paper: 247 249 251;
+  --color-surface: 255 255 255;
+  --color-slate: 69 70 77;
+  --color-slate-light: 138 147 163;
+  --color-line: 229 231 235;
+
+  /* Accent — swappable via Appearance settings, same hue in both themes */
+  --color-signal: 29 78 216;
+  --color-signal-dark: color-mix(in srgb, rgb(var(--color-signal)) 82%, black);
+  --color-signal-light: color-mix(in srgb, rgb(var(--color-signal)) 10%, white);
+
+  --color-progress: 0 150 104;
+  --color-progress-light: color-mix(in srgb, rgb(var(--color-progress)) 12%, white);
+  --color-amber: 238 155 46;
+  --color-amber-light: color-mix(in srgb, rgb(var(--color-amber)) 14%, white);
+  --color-coral: 186 26 26;
+  --color-coral-light: color-mix(in srgb, rgb(var(--color-coral)) 10%, white);
+}
+
+.dark {
+  color-scheme: dark;
+  --color-ink: 220 225 251;
+  --color-paper: 12 19 36;
+  --color-surface: 22 30 50;
+  --color-slate: 187 202 191;
+  --color-slate-light: 120 133 128;
+  --color-line: 51 65 85;
+
+  --color-signal-light: color-mix(in srgb, rgb(var(--color-signal)) 22%, black);
+
+  --color-progress: 16 185 129;
+  --color-progress-light: color-mix(in srgb, rgb(var(--color-progress)) 18%, black);
+  --color-amber: 245 166 53;
+  --color-amber-light: color-mix(in srgb, rgb(var(--color-amber)) 18%, black);
+  --color-coral: 248 113 113;
+  --color-coral-light: color-mix(in srgb, rgb(var(--color-coral)) 16%, black);
+}
+
 html, body {
-  background: #F7F9FB;
-  color: #0F172A;
+  background: rgb(var(--color-paper));
+  color: rgb(var(--color-ink));
 }
 
 * {
@@ -12,12 +53,12 @@ html, body {
 }
 
 ::selection {
-  background: #EFF6FF;
-  color: #1E40AF;
+  background: rgb(var(--color-signal) / 0.15);
+  color: rgb(var(--color-signal-dark, var(--color-signal)));
 }
 
 :focus-visible {
-  outline: 2px solid #1D4ED8;
+  outline: 2px solid rgb(var(--color-signal));
   outline-offset: 2px;
 }
 
@@ -34,4 +75,53 @@ html, body {
 
 .card-pop {
   animation: card-pop 350ms ease-out both;
+}
+
+/* Glass surface: translucent card body over a blurred backdrop. Pair with
+   a bg-surface/NN utility on the element (opacity is chosen per-context). */
+.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Soft ambient accent glow, used sparingly on primary actions and active
+   nav state — not on every surface, so it stays a highlight, not noise. */
+.glow {
+  box-shadow: 0 0 0 1px rgb(var(--color-signal) / 0.25), 0 8px 20px -6px rgb(var(--color-signal) / 0.5);
+}
+
+/* Large soft background blobs for the app shell's atmospheric backdrop. */
+.ambient-glow {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  filter: blur(60px);
+  background: rgb(var(--color-signal) / 0.08);
+}
+
+.dark .ambient-glow {
+  background: rgb(var(--color-signal) / 0.12);
+}
+
+/* Slow ambient breathing for background glow blobs — barely perceptible,
+   just enough to keep the backdrop from feeling static. */
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+.ambient-glow {
+  animation: glow-breathe 9s ease-in-out infinite;
+}
+
+/* Subtle breathing glow ring for a genuinely "live/in-progress" indicator
+   (not for mere selection state — reserved for actual active work).
+   Uses currentColor so it follows the element's own status color. */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 15%, transparent), 0 4px 14px -4px color-mix(in srgb, currentColor 25%, transparent); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent), 0 4px 20px -2px color-mix(in srgb, currentColor 55%, transparent); }
+}
+
+.glow-pulse {
+  animation: glow-pulse 2.6s ease-in-out infinite;
 }

@@ -11,7 +11,8 @@ import CompanyStatusGate from '@/components/CompanyStatusGate'
 import TopNav from '@/components/TopNav'
 import RoadmapTimeline from '@/components/RoadmapTimeline'
 import EmptyState from '@/components/EmptyState'
-import { STATUS } from '@/lib/stages'
+import { useStatusLibrary } from '@/lib/useStatusLibrary'
+import { resolveStatusKind, STATUS_KINDS } from '@/lib/statusLibrary'
 
 export default function TeamPage() {
   return (
@@ -26,6 +27,7 @@ export default function TeamPage() {
 function TeamDashboard() {
   const { profile } = useAuth()
   const [projects, setProjects] = useState([])
+  const { library } = useStatusLibrary(profile?.companyId, false)
 
   useEffect(() => {
     if (!profile?.pmId) return
@@ -50,7 +52,7 @@ function TeamDashboard() {
         ) : (
           <div className="space-y-4">
             {projects.map((p) => (
-              <TeamProjectCard key={p.id} project={p} />
+              <TeamProjectCard key={p.id} project={p} library={library} />
             ))}
           </div>
         )}
@@ -59,15 +61,15 @@ function TeamDashboard() {
   )
 }
 
-function TeamProjectCard({ project }) {
+function TeamProjectCard({ project, library }) {
   const stages = project.stages || []
-  const done = stages.filter((s) => s.status === STATUS.DONE).length
-  const current = stages.find((s) => s.status === STATUS.IN_PROGRESS)
+  const done = stages.filter((s) => resolveStatusKind(s.status, library) === STATUS_KINDS.DONE).length
+  const current = stages.find((s) => resolveStatusKind(s.status, library) === STATUS_KINDS.IN_PROGRESS)
 
   return (
     <Link
       href={`/project/${project.id}`}
-      className="block bg-white rounded-card shadow-card p-6 hover:shadow-lg transition-shadow card-pop"
+      className="block bg-surface rounded-card shadow-card p-6 hover:shadow-lg transition-shadow card-pop"
     >
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-center gap-3 min-w-0">
@@ -86,7 +88,7 @@ function TeamProjectCard({ project }) {
         )}
       </div>
 
-      <RoadmapTimeline stages={stages} />
+      <RoadmapTimeline stages={stages} library={library} />
     </Link>
   )
 }

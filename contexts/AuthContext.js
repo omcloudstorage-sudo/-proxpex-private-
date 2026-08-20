@@ -12,6 +12,7 @@ const AuthContext = createContext({
   companyLoading: false,
   loading: true,
   signOut: async () => {},
+  refreshUser: async () => {},
 })
 
 export function AuthProvider({ children }) {
@@ -71,8 +72,17 @@ export function AuthProvider({ children }) {
     await fbSignOut(auth)
   }
 
+  // Firebase's `emailVerified` is only as fresh as the last-fetched user
+  // record, so callers polling for live verification status (e.g. the
+  // "verify your email" gate) need this to pull the latest value.
+  const refreshUser = async () => {
+    if (!auth.currentUser) return
+    await auth.currentUser.reload()
+    setUser(Object.assign(Object.create(Object.getPrototypeOf(auth.currentUser)), auth.currentUser))
+  }
+
   return (
-    <AuthContext.Provider value={{ user, profile, company, companyLoading, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, company, companyLoading, loading, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

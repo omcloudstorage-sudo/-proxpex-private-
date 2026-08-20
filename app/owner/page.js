@@ -47,7 +47,7 @@ function OwnerDashboard() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="h-20 border-b border-line bg-white flex items-center justify-between px-8">
+      <header className="h-20 border-b border-line bg-surface/80 glass sticky top-0 z-10 flex items-center justify-between px-8">
         <div className="flex items-center gap-2.5">
           <Logo className="h-8" />
           <span className="font-display text-lg font-bold text-ink tracking-tight">Proxpex</span>
@@ -133,7 +133,7 @@ function Section({ title, count, children }) {
 
 function CompanyRow({ company, onApprove, onReject }) {
   return (
-    <div className="bg-white border border-line rounded-card shadow-card p-5 flex items-center justify-between gap-3">
+    <div className="bg-surface border border-line rounded-card shadow-card p-5 flex items-center justify-between gap-3">
       <div className="flex items-center gap-4 min-w-0">
         <div className="w-10 h-10 rounded-full bg-signal-light text-signal flex items-center justify-center font-display font-bold text-base flex-shrink-0">
           {company.name?.[0]?.toUpperCase() || '?'}
@@ -158,7 +158,7 @@ function CompanyRow({ company, onApprove, onReject }) {
         {onApprove && (
           <button
             onClick={onApprove}
-            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-ink px-4 py-2 rounded-full hover:bg-ink/90 transition-colors"
+            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-signal px-4 py-2 rounded-full hover:bg-signal-dark transition-colors"
           >
             <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Approve
           </button>

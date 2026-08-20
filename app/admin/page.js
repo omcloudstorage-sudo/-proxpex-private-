@@ -2,22 +2,21 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { FolderKanban, Briefcase, Users, CalendarClock, Plus, User, Building2 } from 'lucide-react'
-import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAdminData } from '@/contexts/AdminDataContext'
-import { makeDefaultStages } from '@/lib/stages'
-import { LabeledInput, LabeledSelect } from '@/components/FormFields'
+import { useStatusLibrary } from '@/lib/useStatusLibrary'
+import { resolveStatusKind } from '@/lib/statusLibrary'
+import NewProjectForm from '@/components/NewProjectForm'
 import EmptyState from '@/components/EmptyState'
 import ProgressBar from '@/components/ProgressBar'
-import { logAction, AUDIT_ACTIONS } from '@/lib/auditLog'
 
 export default function AdminProjectsPage() {
   const { profile } = useAuth()
   const { projects, pms, clients } = useAdminData()
+  const { library } = useStatusLibrary(profile?.companyId, true)
 
-  const dueThisWeek = useMemo(() => countStagesDueThisWeek(projects), [projects])
+  const dueThisWeek = useMemo(() => countStagesDueThisWeek(projects, library), [projects, library])
 
   return (
     <div>
@@ -35,12 +34,12 @@ export default function AdminProjectsPage() {
         <StatCard icon={CalendarClock} label="Due this week" value={dueThisWeek} tone="neutral" />
       </div>
 
-      <ProjectsTab projects={projects} pms={pms} clients={clients} profile={profile} />
+      <ProjectsTab projects={projects} pms={pms} clients={clients} profile={profile} library={library} />
     </div>
   )
 }
 
-function countStagesDueThisWeek(projects) {
+function countStagesDueThisWeek(projects, library) {
   const now = new Date()
   const todayStr = now.toISOString().slice(0, 10)
   const weekAhead = new Date(now)
@@ -50,7 +49,7 @@ function countStagesDueThisWeek(projects) {
   let count = 0
   for (const project of projects) {
     for (const stage of project.stages || []) {
-      if (stage.status === 'done' || !stage.dueDate) continue
+      if (resolveStatusKind(stage.status, library) === 'done' || !stage.dueDate) continue
       if (stage.dueDate >= todayStr && stage.dueDate <= weekAheadStr) count += 1
     }
   }
@@ -60,7 +59,7 @@ function countStagesDueThisWeek(projects) {
 function StatCard({ icon: Icon, label, value, tone = 'signal' }) {
   const toneCls = tone === 'signal' ? 'bg-signal-light text-signal' : 'bg-paper text-slate'
   return (
-    <div className="bg-white border border-line rounded-card shadow-card p-6 flex flex-col justify-between h-[160px]">
+    <div className="bg-surface border border-line rounded-card shadow-card p-6 flex flex-col justify-between h-[160px]">
       <div className={`w-12 h-9 rounded-lg flex items-center justify-center ${toneCls}`}>
         <Icon className="w-[18px] h-[18px]" strokeWidth={1.75} />
       </div>
@@ -72,50 +71,11 @@ function StatCard({ icon: Icon, label, value, tone = 'signal' }) {
   )
 }
 
-function ProjectsTab({ projects, pms, clients, profile }) {
+function ProjectsTab({ projects, pms, clients, profile, library }) {
   const [showForm, setShowForm] = useState(false)
-  const [name, setName] = useState('')
-  const [pmId, setPmId] = useState('')
-  const [clientId, setClientId] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
 
   const pmMap = useMemo(() => Object.fromEntries(pms.map((p) => [p.id, p.name])), [pms])
   const clientMap = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c.name])), [clients])
-
-  async function createProject(e) {
-    e.preventDefault()
-    setError('')
-    if (!name || !pmId || !clientId) {
-      setError('Please fill in project name, PM, and client.')
-      return
-    }
-    setBusy(true)
-    try {
-      const ref = await addDoc(collection(db, 'projects'), {
-        companyId: profile.companyId,
-        name,
-        pmId,
-        clientId,
-        stages: makeDefaultStages(),
-        createdAt: serverTimestamp(),
-      })
-      await logAction(
-        ref.id,
-        { uid: profile.id, name: profile.name, role: profile.role },
-        AUDIT_ACTIONS.PROJECT_CREATED,
-        `Project created — PM: ${pmMap[pmId] || '—'}, Client: ${clientMap[clientId] || '—'} assigned`
-      )
-      setName('')
-      setPmId('')
-      setClientId('')
-      setShowForm(false)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <div>
@@ -123,26 +83,14 @@ function ProjectsTab({ projects, pms, clients, profile }) {
         <h2 className="font-display text-xl font-semibold text-ink">Projects</h2>
         <button
           onClick={() => setShowForm((s) => !s)}
-          className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full bg-ink text-white hover:bg-ink/90"
+          className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full bg-signal text-white hover:bg-signal-dark"
         >
           {showForm ? 'Cancel' : (<><Plus className="w-3 h-3" strokeWidth={3} /> New project</>)}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={createProject} className="bg-white border border-line rounded-card shadow-card p-6 mb-6 grid md:grid-cols-4 gap-3 items-end">
-          <LabeledInput label="Project name" value={name} onChange={setName} />
-          <LabeledSelect label="Project manager" value={pmId} onChange={setPmId} options={pms} empty="No PMs yet" />
-          <LabeledSelect label="Client" value={clientId} onChange={setClientId} options={clients} empty="No clients yet" />
-          <button
-            type="submit"
-            disabled={busy}
-            className="text-sm font-medium px-4 py-2.5 rounded-lg bg-signal text-white hover:bg-signal-dark disabled:opacity-50"
-          >
-            {busy ? 'Creating…' : 'Create project'}
-          </button>
-          {error && <p className="text-coral text-xs md:col-span-4">{error}</p>}
-        </form>
+        <NewProjectForm profile={profile} pms={pms} clients={clients} pmMap={pmMap} clientMap={clientMap} onDone={() => setShowForm(false)} />
       )}
 
       {projects.length === 0 ? (
@@ -153,14 +101,14 @@ function ProjectsTab({ projects, pms, clients, profile }) {
             <Link
               key={p.id}
               href={`/project/${p.id}`}
-              className="bg-white/70 backdrop-blur border border-black/5 rounded-card p-6 hover:shadow-card transition-shadow block"
+              className="bg-surface/70 backdrop-blur border border-line rounded-card p-6 hover:shadow-card transition-shadow block"
             >
               <div className="font-display text-xl font-semibold text-ink mb-2">{p.name}</div>
               <div className="text-sm text-slate space-y-1 mb-4">
                 <div className="flex items-center gap-1.5"><User className="w-[13px] h-[13px]" strokeWidth={2} /> <span className="font-medium">PM:</span> {pmMap[p.pmId] || '—'}</div>
                 <div className="flex items-center gap-1.5"><Building2 className="w-3 h-3" strokeWidth={2} /> <span className="font-medium">Client:</span> {clientMap[p.clientId] || '—'}</div>
               </div>
-              <MiniProgress stages={p.stages || []} />
+              <MiniProgress stages={p.stages || []} library={library} />
             </Link>
           ))}
         </div>
@@ -169,9 +117,9 @@ function ProjectsTab({ projects, pms, clients, profile }) {
   )
 }
 
-function MiniProgress({ stages }) {
+function MiniProgress({ stages, library }) {
   const total = stages.length || 1
-  const done = stages.filter((s) => s.status === 'done').length
+  const done = stages.filter((s) => resolveStatusKind(s.status, library) === 'done').length
   const pct = Math.round((done / total) * 100)
   return (
     <div>

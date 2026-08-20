@@ -28,7 +28,6 @@ export default function PeopleTab({ people, role, title, pageTitle, subtitle, pm
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [pmId, setPmId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -42,10 +41,9 @@ export default function PeopleTab({ people, role, title, pageTitle, subtitle, pm
     }
     setBusy(true)
     try {
-      await callAdminApi('/api/create-user', { name, email, password, role, ...(pmOptions ? { pmId } : {}) })
+      await callAdminApi('/api/create-user', { name, email, role, ...(pmOptions ? { pmId } : {}) })
       setName('')
       setEmail('')
-      setPassword('')
       setPmId('')
       setShowForm(false)
     } catch (err) {
@@ -64,17 +62,16 @@ export default function PeopleTab({ people, role, title, pageTitle, subtitle, pm
         </div>
         <button
           onClick={() => setShowForm((s) => !s)}
-          className="flex items-center gap-2 flex-shrink-0 text-sm font-semibold px-5 py-2.5 rounded-full bg-ink text-white hover:bg-ink/90 shadow-card"
+          className="flex items-center gap-2 flex-shrink-0 text-sm font-semibold px-5 py-2.5 rounded-full bg-signal text-white hover:bg-signal-dark shadow-card"
         >
           {showForm ? (<><X className="w-3.5 h-3.5" /> Cancel</>) : (<><Plus className="w-3 h-3" strokeWidth={3} /> New {title.toLowerCase()}</>)}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={createPerson} className={`bg-white border border-line rounded-card shadow-card p-6 mb-6 grid gap-3 items-end ${pmOptions ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
+        <form onSubmit={createPerson} className={`bg-surface border border-line rounded-card shadow-card p-6 mb-6 grid gap-3 items-end ${pmOptions ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           <LabeledInput label="Name" value={name} onChange={setName} />
           <LabeledInput label="Email" value={email} onChange={setEmail} type="email" />
-          <LabeledInput label="Temporary password" value={password} onChange={setPassword} type="text" />
           {pmOptions && (
             <LabeledSelect label="Reports to" value={pmId} onChange={setPmId} options={pmOptions} empty="No PMs yet" />
           )}
@@ -85,7 +82,10 @@ export default function PeopleTab({ people, role, title, pageTitle, subtitle, pm
           >
             {busy ? 'Creating…' : `Add ${title.toLowerCase()}`}
           </button>
-          {error && <p className="text-coral text-xs md:col-span-5">{error}</p>}
+          {error && <p className="text-coral text-xs md:col-span-4">{error}</p>}
+          <p className="text-slate-light text-xs md:col-span-4">
+            They&rsquo;ll get an email with a link to set their own password.
+          </p>
         </form>
       )}
 
@@ -162,15 +162,15 @@ function PersonRow({ person, reportsTo }) {
 
   if (mode === 'edit') {
     return (
-      <div className="bg-white border border-line rounded-card shadow-card p-5 space-y-2">
+      <div className="bg-surface border border-line rounded-card shadow-card p-5 space-y-2">
         <div className="grid sm:grid-cols-2 gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-signal" placeholder="Name" />
-          <input value={email} onChange={(e) => setEmail(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-signal" placeholder="Email" />
+          <input value={name} onChange={(e) => setName(e.target.value)} className="bg-surface text-ink border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-signal" placeholder="Name" />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} className="bg-surface text-ink border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-signal" placeholder="Email" />
         </div>
         {error && <p className="text-coral text-xs">{error}</p>}
         <div className="flex justify-end gap-2">
           <button onClick={reset} className="text-xs font-medium px-2.5 py-1.5 rounded-lg text-slate hover:text-ink flex items-center gap-1"><X className="w-3.5 h-3.5" /> Cancel</button>
-          <button onClick={saveEdit} disabled={busy} className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-ink text-white hover:bg-ink/90 disabled:opacity-50 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Save</button>
+          <button onClick={saveEdit} disabled={busy} className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-signal text-white hover:bg-signal-dark disabled:opacity-50 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Save</button>
         </div>
       </div>
     )
@@ -178,11 +178,11 @@ function PersonRow({ person, reportsTo }) {
 
   if (mode === 'reset') {
     return (
-      <div className="bg-white border border-line rounded-card shadow-card p-5 space-y-2">
+      <div className="bg-surface border border-line rounded-card shadow-card p-5 space-y-2">
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-signal"
+          className="w-full bg-surface text-ink border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-signal"
           placeholder="New temporary password"
         />
         {error && <p className="text-coral text-xs">{error}</p>}
@@ -196,7 +196,7 @@ function PersonRow({ person, reportsTo }) {
 
   if (mode === 'delete') {
     return (
-      <div className="bg-white border border-coral-light rounded-card shadow-card p-5 flex items-center justify-between gap-3">
+      <div className="bg-surface border border-coral-light rounded-card shadow-card p-5 flex items-center justify-between gap-3">
         <span className="text-sm">Remove <strong>{person.name}</strong>&rsquo;s account? This can&rsquo;t be undone.</span>
         <div className="flex items-center gap-2 flex-shrink-0">
           {error && <p className="text-coral text-xs">{error}</p>}
@@ -210,7 +210,7 @@ function PersonRow({ person, reportsTo }) {
   }
 
   return (
-    <div className="bg-white border border-line rounded-card shadow-card p-5 flex items-center justify-between gap-3">
+    <div className="bg-surface border border-line rounded-card shadow-card p-5 flex items-center justify-between gap-3">
       <div className="flex items-center gap-4 min-w-0">
         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-display font-bold text-base flex-shrink-0 ${tone.bg} ${tone.text}`}>
           {person.name?.[0]?.toUpperCase() || '?'}

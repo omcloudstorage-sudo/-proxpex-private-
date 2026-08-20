@@ -8,9 +8,10 @@ import { useAuth } from '@/contexts/AuthContext'
 const PmDataContext = createContext(null)
 
 export function PmDataProvider({ children }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [projects, setProjects] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
+  const [clients, setClients] = useState([])
 
   useEffect(() => {
     if (!user) return
@@ -28,7 +29,16 @@ export function PmDataProvider({ children }) {
     }
   }, [user])
 
-  return <PmDataContext.Provider value={{ projects, teamMembers }}>{children}</PmDataContext.Provider>
+  useEffect(() => {
+    if (!profile?.companyId) return
+    const unsubClients = onSnapshot(
+      query(collection(db, 'users'), where('companyId', '==', profile.companyId), where('role', '==', 'client')),
+      (snap) => setClients(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    )
+    return unsubClients
+  }, [profile?.companyId])
+
+  return <PmDataContext.Provider value={{ projects, teamMembers, clients }}>{children}</PmDataContext.Provider>
 }
 
 export function usePmData() {

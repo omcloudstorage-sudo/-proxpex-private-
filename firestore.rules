@@ -32,6 +32,37 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && request.resource.data.status == 'pending';
       allow update: if signedIn() && me().role == 'platform_owner';
       allow delete: if false;
+
+      // --- Status library (subcollection) ---
+      // Company-wide, shared by every Admin/PM in the company. Everyone in
+      // the company (including Client/Team member) can read it, since stage
+      // status names/colors need to render for them too.
+      match /statusLibrary/{statusId} {
+        allow read: if signedIn() && me().companyId == companyId;
+        allow write: if signedIn() && me().companyId == companyId && (me().role == 'admin' || me().role == 'pm');
+      }
+
+      // --- Priority library (subcollection) ---
+      // Same pattern as statusLibrary — company-wide, everyone can read,
+      // only Admin/PM can write. Company-configurable priority levels.
+      match /priorityLibrary/{priorityId} {
+        allow read: if signedIn() && me().companyId == companyId;
+        allow write: if signedIn() && me().companyId == companyId && (me().role == 'admin' || me().role == 'pm');
+      }
+
+      // --- Roadmap templates (subcollection) ---
+      // Stage list + status set, independent from Requirement Sheet
+      // templates so a project can pick either separately.
+      match /roadmapTemplates/{templateId} {
+        allow read: if signedIn() && me().companyId == companyId;
+        allow write: if signedIn() && me().companyId == companyId && (me().role == 'admin' || me().role == 'pm');
+      }
+
+      // --- Requirement Sheet (resources/credentials) templates (subcollection) ---
+      match /resourceTemplates/{templateId} {
+        allow read: if signedIn() && me().companyId == companyId;
+        allow write: if signedIn() && me().companyId == companyId && (me().role == 'admin' || me().role == 'pm');
+      }
     }
 
     // --- projects ---
@@ -41,11 +72,15 @@ service cloud.firestore {
         request.auth.uid == resource.data.pmId ||
         request.auth.uid == resource.data.clientId
       );
-      allow create: if signedIn() && me().role == 'admin' && me().companyId == request.resource.data.companyId;
+      allow create: if signedIn() && (
+        (me().role == 'admin' && me().companyId == request.resource.data.companyId) ||
+        (me().role == 'pm' && me().companyId == request.resource.data.companyId && request.auth.uid == request.resource.data.pmId)
+      );
       allow update: if signedIn() && (
         (me().role == 'admin' && me().companyId == resource.data.companyId) ||
         (me().role == 'pm' && request.auth.uid == resource.data.pmId) ||
-        (me().role == 'team_member' && me().pmId == resource.data.pmId)
+        (me().role == 'team_member' && me().pmId == resource.data.pmId) ||
+        (me().role == 'client' && request.auth.uid == resource.data.clientId)
       );
       allow delete: if signedIn() && me().role == 'admin' && me().companyId == resource.data.companyId;
 

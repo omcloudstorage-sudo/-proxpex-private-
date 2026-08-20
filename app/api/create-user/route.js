@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server'
+import crypto from 'crypto'
+import { sendPasswordResetEmail } from 'firebase/auth'
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin'
 import { requireManager } from '@/lib/requireAdmin'
+import { auth as clientAuth } from '@/lib/firebase'
 
 export async function POST(req) {
   try {
     const { uid, caller } = await requireManager(req)
-    const { name, email, password, role, pmId } = await req.json()
+    const { name, email, role, pmId } = await req.json()
 
-    if (!name || !email || !password) {
+    if (!name || !email) {
       return NextResponse.json({ error: 'Missing or invalid fields.' }, { status: 400 })
-    }
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 })
     }
 
     let finalPmId = null
@@ -31,13 +31,14 @@ export async function POST(req) {
       }
     } else {
       // caller.role === 'pm'
-      if (role !== 'team_member') {
-        return NextResponse.json({ error: 'Project managers can only add team members.' }, { status: 403 })
+      if (!['team_member', 'client'].includes(role)) {
+        return NextResponse.json({ error: 'Project managers can only add team members or clients.' }, { status: 403 })
       }
-      finalPmId = uid
+      if (role === 'team_member') finalPmId = uid
     }
 
-    const newUser = await adminAuth().createUser({ email, password, displayName: name })
+    const generatedPassword = crypto.randomBytes(32).toString('hex')
+    const newUser = await adminAuth().createUser({ email, password: generatedPassword, displayName: name })
 
     await adminDb().collection('users').doc(newUser.uid).set({
       role,
@@ -47,6 +48,13 @@ export async function POST(req) {
       createdAt: new Date().toISOString(),
       ...(role === 'team_member' ? { pmId: finalPmId } : {}),
     })
+
+    try {
+      await sendPasswordResetEmail(clientAuth, email)
+    } catch (err) {
+      // Account already exists at this point — surface a warning but don't fail the request.
+      return NextResponse.json({ uid: newUser.uid, warning: 'Account created, but the password setup email could not be sent.' })
+    }
 
     return NextResponse.json({ uid: newUser.uid })
   } catch (err) {

@@ -19,7 +19,7 @@ export default function Logo({ className = 'h-6', variant = 'light' }) {
     )
   }
 
-  const textColor = variant === 'dark' ? 'text-paper' : 'text-ink'
+  const textColor = variant === 'dark' ? 'text-white' : 'text-ink'
 
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>

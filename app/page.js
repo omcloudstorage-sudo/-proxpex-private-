@@ -41,7 +41,7 @@ export default function Home() {
         </span>
         <Link
           href="/login"
-          className="text-sm font-medium px-4 py-2 rounded-full border border-ink/10 hover:border-ink/30 transition-colors bg-white/60 backdrop-blur"
+          className="text-sm font-medium px-4 py-2 rounded-full border border-ink/10 hover:border-ink/30 transition-colors bg-surface/60 backdrop-blur"
         >
           Sign in
         </Link>
@@ -61,7 +61,7 @@ export default function Home() {
           </p>
           <Link
             href="/login"
-            className="inline-flex items-center gap-2 bg-ink text-paper font-medium px-6 py-3 rounded-full hover:bg-ink/90 transition-colors shadow-card"
+            className="inline-flex items-center gap-2 bg-signal text-white font-medium px-6 py-3 rounded-full hover:bg-signal-dark transition-colors shadow-card"
           >
             Sign in to your workspace
           </Link>

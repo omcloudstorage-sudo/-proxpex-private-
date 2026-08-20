@@ -1,4 +1,4 @@
-import { Frame, FileText, FileSpreadsheet, FileType2, Smartphone, Link2 } from 'lucide-react'
+import { Frame, FileText, FileSpreadsheet, FileType2, Smartphone, ScrollText, Link2 } from 'lucide-react'
 
 const ICONS = {
   figma: Frame,
@@ -6,6 +6,7 @@ const ICONS = {
   sheet: FileSpreadsheet,
   pdf: FileType2,
   apk: Smartphone,
+  proposal: ScrollText,
   other: Link2,
 }
 

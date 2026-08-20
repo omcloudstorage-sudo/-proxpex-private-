@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
 } from 'firebase/auth'
 import { doc, setDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
@@ -12,7 +14,7 @@ import Logo from '@/components/Logo'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [mode, setMode] = useState('signin') // 'signin' | 'admin-signup'
+  const [mode, setMode] = useState('signin') // 'signin' | 'admin-signup' | 'forgot'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -20,6 +22,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   function goHome(e) {
     e.preventDefault()
@@ -48,6 +51,7 @@ export default function LoginPage() {
     setBusy(true)
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
+      await sendEmailVerification(cred.user)
       const companyRef = doc(collection(db, 'companies'))
       await setDoc(companyRef, {
         name: companyName,
@@ -72,6 +76,31 @@ export default function LoginPage() {
     }
   }
 
+  async function handleForgotPassword(e) {
+    e.preventDefault()
+    setError('')
+    setBusy(true)
+    try {
+      await sendPasswordResetEmail(auth, email)
+      setResetSent(true)
+    } catch (err) {
+      // Don't reveal whether the email is registered.
+      if (err?.code === 'auth/user-not-found') {
+        setResetSent(true)
+      } else {
+        setError(friendlyError(err))
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function switchMode(next) {
+    setMode(next)
+    setError('')
+    setResetSent(false)
+  }
+
   return (
     <main
       className={[
@@ -79,7 +108,7 @@ export default function LoginPage() {
         leaving ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100',
       ].join(' ')}
     >
-      <div className="hidden lg:flex lg:w-[46%] relative overflow-hidden bg-ink flex-col justify-between p-12">
+      <div className="hidden lg:flex lg:w-[46%] relative overflow-hidden bg-[#0F172A] flex-col justify-between p-12">
         <div
           className="pointer-events-none absolute -top-24 -left-24 w-[32rem] h-[32rem] rounded-full opacity-20 blur-3xl"
           style={{ background: 'radial-gradient(circle, #1D4ED8 0%, transparent 70%)' }}
@@ -131,47 +160,92 @@ export default function LoginPage() {
           </a>
 
           <h1 className="font-display text-[28px] font-bold text-ink tracking-tight mb-1">
-            {mode === 'signin' ? 'Welcome back' : 'Create your company workspace'}
+            {mode === 'signin' ? 'Welcome back' : mode === 'forgot' ? 'Reset your password' : 'Create your company workspace'}
           </h1>
           <p className="text-sm text-slate mb-8">
             {mode === 'signin'
               ? 'Sign in to your Proxpex workspace.'
+              : mode === 'forgot'
+              ? 'Enter your email and we’ll send you a link to reset your password.'
               : 'This creates the Admin account for a new company.'}
           </p>
 
-          <form onSubmit={mode === 'signin' ? handleSignIn : handleAdminSignup} className="space-y-4">
-            {mode === 'admin-signup' && (
-              <>
-                <Field label="Your name" value={name} onChange={setName} required />
-                <Field label="Company name" value={companyName} onChange={setCompanyName} required />
-              </>
-            )}
-            <Field label="Email" type="email" value={email} onChange={setEmail} required />
-            <Field label="Password" type="password" value={password} onChange={setPassword} required />
+          {mode === 'forgot' ? (
+            resetSent ? (
+              <div className="space-y-4">
+                <p className="text-sm text-slate">
+                  If an account exists for <span className="font-semibold text-ink">{email}</span>, a password reset link has been sent.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => switchMode('signin')}
+                  className="w-full bg-signal text-white font-semibold py-3 rounded-lg hover:bg-signal-dark transition-colors shadow-card"
+                >
+                  Back to sign in
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <Field label="Email" type="email" value={email} onChange={setEmail} required />
 
-            {error && <p className="text-sm text-coral">{error}</p>}
+                {error && <p className="text-sm text-coral">{error}</p>}
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full bg-ink text-white font-semibold py-3 rounded-lg hover:bg-ink/90 transition-colors disabled:opacity-50 shadow-card"
-            >
-              {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create workspace'}
-            </button>
-          </form>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="w-full bg-signal text-white font-semibold py-3 rounded-lg hover:bg-signal-dark transition-colors disabled:opacity-50 shadow-card"
+                >
+                  {busy ? 'Please wait…' : 'Send reset link'}
+                </button>
+              </form>
+            )
+          ) : (
+            <form onSubmit={mode === 'signin' ? handleSignIn : handleAdminSignup} className="space-y-4">
+              {mode === 'admin-signup' && (
+                <>
+                  <Field label="Your name" value={name} onChange={setName} required />
+                  <Field label="Company name" value={companyName} onChange={setCompanyName} required />
+                </>
+              )}
+              <Field label="Email" type="email" value={email} onChange={setEmail} required />
+              <Field label="Password" type="password" value={password} onChange={setPassword} required />
+
+              {mode === 'signin' && (
+                <div className="flex justify-end -mt-2">
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-signal"
+                    onClick={() => switchMode('forgot')}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
+
+              {error && <p className="text-sm text-coral">{error}</p>}
+
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full bg-signal text-white font-semibold py-3 rounded-lg hover:bg-signal-dark transition-colors disabled:opacity-50 shadow-card"
+              >
+                {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create workspace'}
+              </button>
+            </form>
+          )}
 
           <p className="text-center text-sm text-slate mt-6">
             {mode === 'signin' ? (
               <>
                 First time here?{' '}
-                <button className="text-signal font-semibold" onClick={() => setMode('admin-signup')}>
+                <button className="text-signal font-semibold" onClick={() => switchMode('admin-signup')}>
                   Set up your company
                 </button>
               </>
             ) : (
               <>
-                Already have a workspace?{' '}
-                <button className="text-signal font-semibold" onClick={() => setMode('signin')}>
+                {mode === 'forgot' ? 'Remembered your password?' : 'Already have a workspace?'}{' '}
+                <button className="text-signal font-semibold" onClick={() => switchMode('signin')}>
                   Sign in
                 </button>
               </>
@@ -197,7 +271,7 @@ function Field({ label, value, onChange, type = 'text', required }) {
         value={value}
         required={required}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-line rounded-lg px-3.5 py-2.5 text-sm focus:border-signal outline-none transition-colors"
+        className="w-full bg-surface text-ink border border-line rounded-lg px-3.5 py-2.5 text-sm focus:border-signal outline-none transition-colors"
       />
     </label>
   )

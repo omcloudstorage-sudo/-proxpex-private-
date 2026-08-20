@@ -11,7 +11,7 @@ export default function TopNav() {
   const { profile } = useAuth()
 
   return (
-    <header className="border-b border-line bg-white/80 backdrop-blur sticky top-0 z-10">
+    <header className="border-b border-line bg-surface/80 glass sticky top-0 z-10">
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <Link href={profile ? ROLE_HOME[profile.role] : '/'} className="flex items-center gap-2.5">
           <Logo className="h-8" />

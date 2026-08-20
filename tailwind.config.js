@@ -1,5 +1,12 @@
 /** @type {import('tailwindcss').Config} */
+
+function withOpacity(varName) {
+  return ({ opacityValue }) =>
+    opacityValue !== undefined ? `rgb(var(${varName}) / ${opacityValue})` : `rgb(var(${varName}))`
+}
+
 module.exports = {
+  darkMode: 'class',
   content: [
     './app/**/*.{js,jsx}',
     './components/**/*.{js,jsx}',
@@ -7,30 +14,31 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        ink: '#0F172A',
-        paper: '#F7F9FB',
+        ink: withOpacity('--color-ink'),
+        paper: withOpacity('--color-paper'),
+        surface: withOpacity('--color-surface'),
         slate: {
-          DEFAULT: '#45464D',
-          light: '#8A93A3',
+          DEFAULT: withOpacity('--color-slate'),
+          light: withOpacity('--color-slate-light'),
         },
         signal: {
-          DEFAULT: '#1D4ED8',
-          dark: '#1E40AF',
-          light: '#EFF6FF',
+          DEFAULT: withOpacity('--color-signal'),
+          dark: 'var(--color-signal-dark)',
+          light: 'var(--color-signal-light)',
         },
         progress: {
-          DEFAULT: '#009668',
-          light: '#E4F6EE',
+          DEFAULT: withOpacity('--color-progress'),
+          light: 'var(--color-progress-light)',
         },
         amber: {
-          DEFAULT: '#EE9B2E',
-          light: '#FDF1DF',
+          DEFAULT: withOpacity('--color-amber'),
+          light: 'var(--color-amber-light)',
         },
         coral: {
-          DEFAULT: '#BA1A1A',
-          light: '#FFDAD6',
+          DEFAULT: withOpacity('--color-coral'),
+          light: 'var(--color-coral-light)',
         },
-        line: '#E5E7EB',
+        line: withOpacity('--color-line'),
       },
       fontFamily: {
         display: ['var(--font-display)'],
@@ -41,7 +49,8 @@ module.exports = {
         card: '12px',
       },
       boxShadow: {
-        card: '0 1px 1px rgba(15,23,42,0.05), 0 12px 32px -16px rgba(15,23,42,0.08)',
+        card: '0 1px 1px rgb(0 0 0 / 0.05), 0 12px 32px -16px rgb(0 0 0 / 0.08)',
+        glow: '0 0 0 1px rgb(var(--color-signal) / 0.15), 0 4px 16px -4px rgb(var(--color-signal) / 0.35)',
       },
     },
   },

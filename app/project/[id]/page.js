@@ -12,9 +12,13 @@ import TopNav from '@/components/TopNav'
 import RoadmapTimeline from '@/components/RoadmapTimeline'
 import StagePanel from '@/components/StagePanel'
 import AuditLogPanel from '@/components/AuditLogPanel'
+import DocumentsPanel from '@/components/DocumentsPanel'
+import ResourcesPanel from '@/components/ResourcesPanel'
 import { newStage } from '@/lib/stages'
 import { MOM_STATUS } from '@/lib/momEntries'
 import { AUDIT_ACTIONS, logAction as writeAuditLog } from '@/lib/auditLog'
+import { useStatusLibrary } from '@/lib/useStatusLibrary'
+import { activeStatuses, STATUS_KINDS, MAX_PROJECT_STATUSES } from '@/lib/statusLibrary'
 
 const NO_ACCESS = { canView: false, canManage: false, canPostUpdate: false }
 
@@ -76,10 +80,12 @@ export default function ProjectDetailPage() {
       return { canView: true, canManage: false, canPostUpdate: true }
     }
     if (profile.role === 'client' && project.clientId === user?.uid) {
-      return { canView: true, canManage: false, canPostUpdate: false }
+      return { canView: true, canManage: false, canPostUpdate: true }
     }
     return NO_ACCESS
   }, [project, profile, user])
+
+  const { library } = useStatusLibrary(project?.companyId, access.canManage)
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login')
@@ -102,6 +108,16 @@ export default function ProjectDetailPage() {
   const activeStage = stages.find((s) => s.id === activeStageId) || stages[0] || null
   const currentUser = { uid: user?.uid, name: profile?.name, role: profile?.role }
 
+  // Company library entries plus this project's own on-the-spot statuses
+  // (added directly on this screen, never written back to Settings — see
+  // addStatus below). Passed as "library" to RoadmapTimeline/StagePanel so
+  // resolveStatusKind/getStatusDisplay resolve custom statuses for free.
+  const effectiveLibrary = [...library, ...(project.customStatuses || [])]
+
+  const statusOptions = project.statusSetIds?.length
+    ? effectiveLibrary.filter((s) => project.statusSetIds.includes(s.id))
+    : activeStatuses(effectiveLibrary)
+
   async function updateStages(nextStages) {
     setProject((p) => ({ ...p, stages: nextStages }))
     await updateDoc(doc(db, 'projects', id), { stages: nextStages })
@@ -113,7 +129,8 @@ export default function ProjectDetailPage() {
   }
 
   function addStage() {
-    const next = [...stages, newStage(stages.length)]
+    const pendingId = statusOptions.find((s) => s.kind === STATUS_KINDS.PENDING)?.id || statusOptions[0]?.id
+    const next = [...stages, newStage(stages.length, pendingId)]
     updateStages(next)
     setActiveStageId(next[next.length - 1].id)
   }
@@ -135,6 +152,36 @@ export default function ProjectDetailPage() {
 
   function logAction(action, description, stageId) {
     writeAuditLog(id, currentUser, action, description, stageId ? { stageId } : {})
+  }
+
+  // Admin/PM only (StagePanel gates the UI on canManage). Adds a status
+  // scoped to this project only — stored on the project doc, never written
+  // to the company's Settings status library, capped at MAX_PROJECT_STATUSES
+  // total (library selections + custom) for this project.
+  async function addStatus({ name, color, kind }) {
+    if (!name?.trim() || statusOptions.length >= MAX_PROJECT_STATUSES) return
+    const entry = {
+      id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: name.trim(),
+      color,
+      kind,
+      active: true,
+    }
+    const nextCustom = [...(project.customStatuses || []), entry]
+    const nextSetIds = [...(project.statusSetIds?.length ? project.statusSetIds : statusOptions.map((s) => s.id)), entry.id]
+    setProject((p) => ({ ...p, customStatuses: nextCustom, statusSetIds: nextSetIds }))
+    await updateDoc(doc(db, 'projects', id), { customStatuses: nextCustom, statusSetIds: nextSetIds })
+    logAction(AUDIT_ACTIONS.STATUS_ADDED, `Added a project-only status "${entry.name}"`)
+  }
+
+  async function updateDocuments(nextDocuments) {
+    setProject((p) => ({ ...p, documents: nextDocuments }))
+    await updateDoc(doc(db, 'projects', id), { documents: nextDocuments })
+  }
+
+  async function updateResources(nextResources) {
+    setProject((p) => ({ ...p, resources: nextResources }))
+    await updateDoc(doc(db, 'projects', id), { resources: nextResources })
   }
 
   async function createMom(stageId, draft) {
@@ -179,8 +226,16 @@ export default function ProjectDetailPage() {
         <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight mb-6">{project.name}</h1>
 
         <div className="flex gap-6 items-start">
-          <aside className="w-72 flex-shrink-0 bg-white/90 backdrop-blur border border-black/5 rounded-card shadow-card p-6 flex flex-col gap-8">
-            <RoadmapTimeline stages={stages} activeStageId={activeStage?.id} onSelectStage={(s) => setActiveStageId(s.id)} />
+          <aside className="w-72 flex-shrink-0 bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 flex flex-col gap-8 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
+            <RoadmapTimeline stages={stages} activeStageId={activeStage?.id} onSelectStage={(s) => setActiveStageId(s.id)} library={effectiveLibrary} />
+
+            <div className="border-t border-line pt-6">
+              <ResourcesPanel resources={project.resources} onChange={updateResources} canManage={canManage} logAction={logAction} />
+            </div>
+
+            <div className="border-t border-line pt-6">
+              <DocumentsPanel documents={project.documents} editable={canManage} onChange={updateDocuments} logAction={logAction} />
+            </div>
 
             {canManage && activeStage && (
               <div className="border-t border-line pt-6 flex flex-col gap-2">
@@ -205,6 +260,9 @@ export default function ProjectDetailPage() {
               currentUser={currentUser}
               onChange={handleStageChange}
               logAction={logAction}
+              statusOptions={statusOptions}
+              onAddStatus={addStatus}
+              maxStatuses={MAX_PROJECT_STATUSES}
               momEntries={activeMomEntries}
               onCreateMom={(draft) => createMom(activeStage.id, draft)}
               onUpdateMom={updateMom}
