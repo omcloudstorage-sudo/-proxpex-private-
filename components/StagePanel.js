@@ -8,6 +8,7 @@ import { getStatusDisplay, resolveStatusKind, STATUS_KIND_OPTIONS, STATUS_KINDS 
 import { AUDIT_ACTIONS } from '@/lib/auditLog'
 import EntryModal from '@/components/EntryModal'
 import PulseDot from '@/components/PulseDot'
+import InvoicesPanel from '@/components/InvoicesPanel'
 
 export default function StagePanel({
   stage,
@@ -46,7 +47,12 @@ export default function StagePanel({
   function changeStatus(status) {
     const label = getStatusDisplay(status, statusOptions).name
     logAction?.(AUDIT_ACTIONS.STAGE_STATUS_CHANGED, `Changed "${local.name}" status to ${label}`, local.id)
-    commit({ status })
+    const kind = resolveStatusKind(status, statusOptions)
+    if (kind === STATUS_KINDS.DONE) {
+      commit({ status, completedAt: local.completedAt || new Date().toISOString() })
+    } else {
+      commit({ status, completedAt: null })
+    }
   }
 
   function changeDueDate(dueDate) {
@@ -55,10 +61,11 @@ export default function StagePanel({
   }
 
   const daysLeft = getDaysLeft(local.dueDate)
+  const isDone = resolveStatusKind(local.status, statusOptions) === STATUS_KINDS.DONE
 
   return (
     <div className="space-y-6">
-      <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 md:p-7">
+      <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 md:p-7">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex items-center gap-3">
             {canManage ? (
@@ -92,7 +99,12 @@ export default function StagePanel({
         <div className="pt-6 border-t border-line flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-4">
             <span className="text-xs font-medium uppercase tracking-wide text-slate">Next milestone</span>
-            {canManage ? (
+            {isDone ? (
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-progress">
+                <Check className="w-4 h-4" strokeWidth={2.5} />
+                Completed{local.completedAt ? ` ${formatDate(local.completedAt)}` : ''}
+              </span>
+            ) : canManage ? (
               <input
                 type="date"
                 value={local.dueDate || ''}
@@ -103,7 +115,7 @@ export default function StagePanel({
               <span className="text-sm text-ink">{local.dueDate || '—'}</span>
             )}
           </div>
-          {daysLeft !== null && (
+          {!isDone && daysLeft !== null && (
             <span
               className={[
                 'text-xs font-medium px-3 py-1 rounded-full border',
@@ -121,7 +133,7 @@ export default function StagePanel({
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 h-[400px] flex flex-col">
+        <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 h-[400px] flex flex-col">
           <TeamUpdates
             updates={local.updates}
             canPost={canPostUpdate}
@@ -132,7 +144,7 @@ export default function StagePanel({
             stageName={local.name}
           />
         </div>
-        <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 h-[400px] flex flex-col">
+        <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 h-[400px] flex flex-col">
           <MomPanel
             entries={momEntries}
             canManage={canManage}
@@ -145,6 +157,14 @@ export default function StagePanel({
           />
         </div>
       </div>
+
+      <InvoicesPanel
+        invoices={local.invoices}
+        canManage={canManage}
+        onChange={(invoices) => commit({ invoices })}
+        logAction={logAction}
+        stageName={local.name}
+      />
     </div>
   )
 }
@@ -207,7 +227,11 @@ function TeamUpdates({ updates, canPost, currentUser, onChange, logAction, stage
       {adding && <div className="mb-2.5 flex-shrink-0"><UpdateForm draft={draft} setDraft={setDraft} onSave={saveDraft} onCancel={cancelDraft} /></div>}
 
       <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 min-h-0">
-        {sorted.length === 0 && !adding && <p className="text-sm text-slate-light italic">No updates yet.</p>}
+        {sorted.length === 0 && !adding && (
+          <p className="text-sm text-slate-light italic">
+            No updates yet{canPost ? ' — be the first to post one.' : '.'}
+          </p>
+        )}
 
         {sorted.map((entry) =>
           editingId === entry.id ? (
@@ -336,7 +360,11 @@ function MomPanel({ entries, canManage, currentUser, onCreate, onUpdate, onDelet
       {adding && <div className="mb-2.5 flex-shrink-0"><MomForm draft={draft} setDraft={setDraft} onSave={saveDraft} onCancel={cancelDraft} /></div>}
 
       <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 min-h-0">
-        {sorted.length === 0 && !adding && <p className="text-sm text-slate-light italic">No MOM entries yet.</p>}
+        {sorted.length === 0 && !adding && (
+          <p className="text-sm text-slate-light italic">
+            No MOM entries yet{canManage ? ' — create one to keep formal minutes here.' : '.'}
+          </p>
+        )}
 
         {sorted.map((entry) =>
           editingId === entry.id ? (
@@ -541,6 +569,13 @@ function formatTimestamp(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function getDaysLeft(dueDate) {

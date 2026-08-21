@@ -43,8 +43,19 @@
   --color-coral-light: color-mix(in srgb, rgb(var(--color-coral)) 16%, black);
 }
 
-html, body {
+html {
   background: rgb(var(--color-paper));
+  color: rgb(var(--color-ink));
+}
+
+/* Deliberately transparent, not just redundant with html: a background
+   painted directly on <body> is normal in-flow content, which paints
+   ABOVE a fixed, negative-z-index layer regardless of z-index value —
+   that's what was hiding EmberField behind every page. html's background
+   (above) still fills the canvas underneath everything, including the
+   negative-z-index ember layer. */
+body {
+  background: transparent;
   color: rgb(var(--color-ink));
 }
 
@@ -124,4 +135,74 @@ html, body {
 
 .glow-pulse {
   animation: glow-pulse 2.6s ease-in-out infinite;
+}
+
+/* Card hover lift — used on project cards, stage panels, list rows, audit
+   log entries: anywhere a bordered/shadowed surface is clickable or worth
+   drawing the eye to on hover. Small numbers on purpose, this is a
+   professional tool, not a game — it should read as "responsive", not
+   bouncy. */
+.card-hover {
+  transition: transform 180ms ease-out, box-shadow 180ms ease-out;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px -2px rgb(0 0 0 / 0.08), 0 18px 38px -14px rgb(0 0 0 / 0.16);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-hover:hover {
+    transform: none;
+  }
+}
+
+/* Route fade — plays once whenever a page's content mounts, i.e. on every
+   top-level navigation between dashboard / list / detail screens. Short
+   enough to smooth the jump without reading as a loading delay. */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.page-fade {
+  animation: page-fade-in 220ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-fade {
+    animation: none;
+  }
+}
+
+/* Ambient "floating embers" backdrop — warm particles drifting slowly
+   upward behind all page content, platform-wide. Pure CSS (no canvas, no
+   particle library): each ember is one absolutely-positioned span whose
+   only cost is a GPU-composited transform/opacity animation, cheap enough
+   to run continuously even on low-end devices. */
+.ember-field {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ember {
+  position: absolute;
+  bottom: -5%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(var(--color-signal) / 0.8) 0%, rgb(var(--color-signal) / 0) 70%);
+  box-shadow: 0 0 12px 4px rgb(var(--color-signal) / 0.3);
+  filter: blur(0.5px);
+  animation-name: ember-rise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+@keyframes ember-rise {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  15% { opacity: var(--ember-opacity, 0.25); }
+  70% { opacity: var(--ember-opacity, 0.25); }
+  100% { transform: translateY(-108vh) translateX(var(--ember-drift, 10px)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ember-field {
+    display: none;
+  }
 }

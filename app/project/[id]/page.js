@@ -14,14 +14,21 @@ import StagePanel from '@/components/StagePanel'
 import AuditLogPanel from '@/components/AuditLogPanel'
 import DocumentsPanel from '@/components/DocumentsPanel'
 import ResourcesPanel from '@/components/ResourcesPanel'
+import ProgressBar from '@/components/ProgressBar'
 import { newStage } from '@/lib/stages'
 import { countryOptions, findCountry } from '@/lib/countries'
 import { MOM_STATUS } from '@/lib/momEntries'
 import { AUDIT_ACTIONS, logAction as writeAuditLog } from '@/lib/auditLog'
 import { useStatusLibrary } from '@/lib/useStatusLibrary'
-import { activeStatuses, STATUS_KINDS, MAX_PROJECT_STATUSES } from '@/lib/statusLibrary'
+import { activeStatuses, resolveStatusKind, STATUS_KINDS, MAX_PROJECT_STATUSES } from '@/lib/statusLibrary'
 
 const NO_ACCESS = { canView: false, canManage: false, canPostUpdate: false }
+
+function formatLastUpdated(ts) {
+  const date = typeof ts?.toDate === 'function' ? ts.toDate() : new Date(ts)
+  if (Number.isNaN(date?.getTime())) return ''
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
 
 export default function ProjectDetailPage() {
   const { id } = useParams()
@@ -225,32 +232,52 @@ export default function ProjectDetailPage() {
 
   const activeMomEntries = momEntries.filter((m) => m.stageId === activeStage?.id)
 
+  const doneStages = stages.filter((s) => resolveStatusKind(s.status, effectiveLibrary) === STATUS_KINDS.DONE).length
+  const progressPct = stages.length ? Math.round((doneStages / stages.length) * 100) : 0
+  const lastUpdatedAt = auditLog[0]?.createdAt
+
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="min-h-screen page-fade">
       <TopNav />
       <main className="max-w-[1440px] mx-auto px-8 py-8">
-        <div className="mb-6">
-          <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight">{project.name}</h1>
-          <div className="mt-1">
-            {canManage ? (
-              <select
-                value={project.country || ''}
-                onChange={(e) => updateCountry(e.target.value)}
-                className="text-sm text-slate bg-transparent border border-line rounded-lg px-2 py-1 outline-none focus:border-signal"
-              >
-                <option value="">No country set</option>
-                {countryOptions.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            ) : (
-              project.country && <span className="text-sm text-slate">{findCountry(project.country)?.name}</span>
-            )}
+        <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+          <div>
+            <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight">{project.name}</h1>
+            <div className="mt-1">
+              {canManage ? (
+                <select
+                  value={project.country || ''}
+                  onChange={(e) => updateCountry(e.target.value)}
+                  className="text-sm text-slate bg-transparent border border-line rounded-lg px-2 py-1 outline-none focus:border-signal"
+                >
+                  <option value="">No country set</option>
+                  {countryOptions.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              ) : (
+                project.country && <span className="text-sm text-slate">{findCountry(project.country)?.name}</span>
+              )}
+            </div>
           </div>
+          {lastUpdatedAt && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-light mt-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-progress glow-pulse" />
+              Last updated {formatLastUpdated(lastUpdatedAt)}
+            </span>
+          )}
         </div>
 
         <div className="flex gap-6 items-start">
           <aside className="w-72 flex-shrink-0 bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 flex flex-col gap-8 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
+            <div>
+              <div className="flex items-center justify-between mb-2 text-xs">
+                <span className="text-slate font-semibold uppercase tracking-wide">{doneStages} of {stages.length} stages done</span>
+                <span className="text-progress font-bold">{progressPct}%</span>
+              </div>
+              <ProgressBar pct={progressPct} className="h-2" />
+            </div>
+
             <RoadmapTimeline stages={stages} activeStageId={activeStage?.id} onSelectStage={(s) => setActiveStageId(s.id)} library={effectiveLibrary} />
 
             <div className="border-t border-line pt-6">

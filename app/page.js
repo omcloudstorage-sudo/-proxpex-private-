@@ -20,7 +20,7 @@ export default function Home() {
 
   if (loading || (user && profile)) {
     return (
-      <div className="min-h-screen bg-paper flex flex-col items-center justify-center gap-3">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
         <Logo className="h-9 animate-pulse" />
         <span className="text-slate text-sm">Loading Proxpex…</span>
       </div>
@@ -28,7 +28,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-paper flex flex-col relative overflow-hidden">
+    <main className="min-h-screen page-fade flex flex-col relative overflow-hidden">
       <div
         className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[42rem] h-[42rem] rounded-full opacity-50 blur-3xl"
         style={{ background: 'radial-gradient(circle, #E7EDFE 0%, transparent 70%)' }}

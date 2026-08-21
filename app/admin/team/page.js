@@ -9,14 +9,16 @@ export default function AdminTeamPage() {
   const pmNameById = useMemo(() => Object.fromEntries(pms.map((p) => [p.id, p.name])), [pms])
 
   return (
-    <PeopleTab
-      people={teamMembers}
-      role="team_member"
-      title="Team member"
-      pageTitle="Team members"
-      subtitle="Everyone added to a PM's team, across your whole company."
-      pmOptions={pms}
-      pmNameById={pmNameById}
-    />
+    <div className="page-fade">
+      <PeopleTab
+        people={teamMembers}
+        role="team_member"
+        title="Team member"
+        pageTitle="Team members"
+        subtitle="Everyone added to a PM's team, across your whole company."
+        pmOptions={pms}
+        pmNameById={pmNameById}
+      />
+    </div>
   )
 }

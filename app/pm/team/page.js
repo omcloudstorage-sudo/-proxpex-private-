@@ -7,12 +7,14 @@ export default function PmTeamPage() {
   const { teamMembers } = usePmData()
 
   return (
-    <PeopleTab
-      people={teamMembers}
-      role="team_member"
-      title="Team member"
-      pageTitle="Team members"
-      subtitle="People you've added who can post project updates on your behalf."
-    />
+    <div className="page-fade">
+      <PeopleTab
+        people={teamMembers}
+        role="team_member"
+        title="Team member"
+        pageTitle="Team members"
+        subtitle="People you've added who can post project updates on your behalf."
+      />
+    </div>
   )
 }

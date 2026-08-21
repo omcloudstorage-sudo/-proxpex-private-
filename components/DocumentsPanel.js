@@ -59,7 +59,11 @@ export default function DocumentsPanel({ documents, editable, onChange, logActio
       </div>
 
       <ul className="space-y-1.5">
-        {(documents || []).length === 0 && !adding && <li className="text-sm text-slate-light italic">No documents added.</li>}
+        {(documents || []).length === 0 && !adding && (
+          <li className="text-sm text-slate-light italic">
+            No documents yet{editable ? ' — add one to keep resources in one place.' : '.'}
+          </li>
+        )}
 
         {(documents || []).map((docItem) =>
           editingId === docItem.id ? (

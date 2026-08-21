@@ -21,7 +21,7 @@ export default function AdminSettingsPage() {
   const { templates: resourceTemplates } = useResourceTemplates(profile?.companyId)
 
   return (
-    <div>
+    <div className="page-fade">
       <div className="mb-8">
         <h1 className="font-display text-[30px] leading-[1.2] font-bold text-ink tracking-tight">Settings</h1>
         <p className="text-slate text-base mt-1">Your company, account, and the shared configuration every project draws from.</p>

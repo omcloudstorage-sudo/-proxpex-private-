@@ -7,12 +7,14 @@ export default function AdminPmsPage() {
   const { pms } = useAdminData()
 
   return (
-    <PeopleTab
-      people={pms}
-      role="pm"
-      title="Project manager"
-      pageTitle="Project managers"
-      subtitle="Everyone with PM access to your company's projects."
-    />
+    <div className="page-fade">
+      <PeopleTab
+        people={pms}
+        role="pm"
+        title="Project manager"
+        pageTitle="Project managers"
+        subtitle="Everyone with PM access to your company's projects."
+      />
+    </div>
   )
 }

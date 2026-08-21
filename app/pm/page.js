@@ -20,7 +20,7 @@ export default function PmPage() {
   const clientMap = useMemo(() => Object.fromEntries((clients || []).map((c) => [c.id, c.name])), [clients])
 
   return (
-    <div>
+    <div className="page-fade">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight">
@@ -48,7 +48,7 @@ export default function PmPage() {
             <Link
               key={p.id}
               href={`/project/${p.id}`}
-              className="bg-surface/70 backdrop-blur border border-line rounded-card p-6 hover:shadow-card transition-shadow block"
+              className="card-hover bg-surface/70 backdrop-blur border border-line rounded-card p-6 hover:shadow-card block"
             >
               <div className="font-display text-xl font-semibold text-ink mb-2">{p.name}</div>
               <div className="text-sm text-slate space-y-1 mb-4">

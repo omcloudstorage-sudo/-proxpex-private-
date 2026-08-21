@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  const [verifying, setVerifying] = useState(false)
 
   function goHome(e) {
     e.preventDefault()
@@ -49,6 +50,7 @@ export default function LoginPage() {
     e.preventDefault()
     setError('')
     setBusy(true)
+    setVerifying(true)
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
       await sendEmailVerification(cred.user)
@@ -73,6 +75,7 @@ export default function LoginPage() {
       setError(friendlyError(err))
     } finally {
       setBusy(false)
+      setVerifying(false)
     }
   }
 
@@ -102,12 +105,16 @@ export default function LoginPage() {
   }
 
   return (
-    <main
-      className={[
-        'min-h-screen bg-paper flex transition-all duration-300 ease-in',
-        leaving ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100',
-      ].join(' ')}
-    >
+    <main className="min-h-screen flex">
+      {/* Transform/opacity live on this inner wrapper, not <main> itself — a
+          transform on the outermost element would create a stacking context
+          that traps the fixed, negative-z-index EmberField behind it. */}
+      <div
+        className={[
+          'flex w-full transition-all duration-300 ease-in',
+          leaving ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100',
+        ].join(' ')}
+      >
       <div className="hidden lg:flex lg:w-[46%] relative overflow-hidden bg-[#0F172A] flex-col justify-between p-12">
         <div
           className="pointer-events-none absolute -top-24 -left-24 w-[32rem] h-[32rem] rounded-full opacity-20 blur-3xl"
@@ -258,7 +265,21 @@ export default function LoginPage() {
           )}
         </div>
       </div>
+      </div>
+
+      {verifying && <VerifyingOverlay />}
     </main>
+  )
+}
+
+function VerifyingOverlay() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-card px-8 py-7 flex flex-col items-center gap-4 max-w-xs mx-4">
+        <div className="w-9 h-9 border-[3px] border-signal/20 border-t-signal rounded-full animate-spin" />
+        <p className="text-sm font-semibold text-ink text-center">Please wait, verifying your account…</p>
+      </div>
+    </div>
   )
 }
 

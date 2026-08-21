@@ -34,7 +34,11 @@ export default function ResourcesPanel({ resources, onChange, canManage, logActi
           {totalItems ? `${totalItems} item${totalItems === 1 ? '' : 's'}` : 'Open'}
         </span>
       </button>
-      {totalItems === 0 && <p className="text-sm text-slate-light italic mt-1.5">No resources added.</p>}
+      {totalItems === 0 && (
+        <p className="text-sm text-slate-light italic mt-1.5">
+          No resources yet{canManage ? ' — add credentials or links your team needs.' : '.'}
+        </p>
+      )}
 
       {open && mounted && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setOpen(false)}>

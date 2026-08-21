@@ -210,7 +210,7 @@ function PersonRow({ person, reportsTo }) {
   }
 
   return (
-    <div className="bg-surface border border-line rounded-card shadow-card p-5 flex items-center justify-between gap-3">
+    <div className="card-hover bg-surface border border-line rounded-card shadow-card p-5 flex items-center justify-between gap-3">
       <div className="flex items-center gap-4 min-w-0">
         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-display font-bold text-base flex-shrink-0 ${tone.bg} ${tone.text}`}>
           {person.name?.[0]?.toUpperCase() || '?'}

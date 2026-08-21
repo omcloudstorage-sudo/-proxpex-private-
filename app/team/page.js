@@ -39,7 +39,7 @@ function TeamDashboard() {
   }, [profile])
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="min-h-screen page-fade">
       <TopNav />
       <main className="max-w-5xl mx-auto px-6 py-8">
         <h1 className="font-display text-2xl font-semibold mb-1">
@@ -69,7 +69,7 @@ function TeamProjectCard({ project, library }) {
   return (
     <Link
       href={`/project/${project.id}`}
-      className="block bg-surface rounded-card shadow-card p-6 hover:shadow-lg transition-shadow card-pop"
+      className="card-hover card-pop block bg-surface rounded-card shadow-card p-6"
     >
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-center gap-3 min-w-0">

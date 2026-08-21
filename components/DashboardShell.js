@@ -10,7 +10,7 @@ export default function DashboardShell({ navItems, primaryAction, children }) {
   const pathname = usePathname()
 
   return (
-    <div className="min-h-screen bg-paper flex relative overflow-hidden">
+    <div className="min-h-screen flex relative overflow-hidden">
       <div className="ambient-glow -top-32 -right-32 w-[32rem] h-[32rem]" />
       <div className="ambient-glow bottom-0 -left-32 w-[26rem] h-[26rem]" style={{ animationDelay: '-4.5s' }} />
 

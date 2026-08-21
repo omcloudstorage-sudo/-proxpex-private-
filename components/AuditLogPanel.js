@@ -32,13 +32,13 @@ export default function AuditLogPanel({ entries }) {
 
       <div className="max-h-[420px] overflow-y-auto">
         {(!entries || entries.length === 0) && (
-          <p className="text-sm text-slate-light italic px-6 py-6">No activity yet.</p>
+          <p className="text-sm text-slate-light italic px-6 py-6">No activity yet — actions on this project will appear here.</p>
         )}
         {entries?.map((entry) => (
           <div
             key={entry.id}
             onClick={() => setOpenEntry(entry)}
-            className="flex items-start gap-4 px-4 py-4 border-t border-line first:border-t-0 cursor-pointer hover:bg-paper/60 transition-colors"
+            className="card-hover relative z-0 hover:z-10 flex items-start gap-4 px-4 py-4 border-t border-line first:border-t-0 cursor-pointer hover:bg-paper/60"
           >
             <div className={`w-8 h-8 rounded-full border-2 border-white shadow-card flex items-center justify-center text-sm flex-shrink-0 ${toneFor(entry.actorName)}`}>
               {initials(entry.actorName)}

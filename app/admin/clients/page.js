@@ -7,12 +7,14 @@ export default function AdminClientsPage() {
   const { clients } = useAdminData()
 
   return (
-    <PeopleTab
-      people={clients}
-      role="client"
-      title="Client"
-      pageTitle="Clients"
-      subtitle="Everyone with read-only access to their project's roadmap."
-    />
+    <div className="page-fade">
+      <PeopleTab
+        people={clients}
+        role="client"
+        title="Client"
+        pageTitle="Clients"
+        subtitle="Everyone with read-only access to their project's roadmap."
+      />
+    </div>
   )
 }

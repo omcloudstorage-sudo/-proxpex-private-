@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { FolderKanban, Briefcase, Users, CalendarClock, Plus, User, Building2 } from 'lucide-react'
+import { FolderKanban, Briefcase, Users, CalendarClock, DollarSign, Plus, User, Building2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAdminData } from '@/contexts/AdminDataContext'
 import { useStatusLibrary } from '@/lib/useStatusLibrary'
 import { resolveStatusKind } from '@/lib/statusLibrary'
+import { formatCurrency, INVOICE_STATUS } from '@/lib/invoices'
 import NewProjectForm from '@/components/NewProjectForm'
 import EmptyState from '@/components/EmptyState'
 import ProgressBar from '@/components/ProgressBar'
@@ -20,9 +21,10 @@ export default function AdminProjectsPage() {
 
   const dueThisWeek = useMemo(() => countStagesDueThisWeek(projects, library), [projects, library])
   const countryMarkers = useMemo(() => countClientCountries(projects), [projects])
+  const revenue = useMemo(() => sumRevenue(projects), [projects])
 
   return (
-    <div>
+    <div className="page-fade">
       <div className="mb-8">
         <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight">
           {profile?.name ? `Welcome back, ${profile.name.split(' ')[0]}` : 'Projects'}
@@ -30,11 +32,18 @@ export default function AdminProjectsPage() {
         <p className="text-slate text-lg mt-1">Here&rsquo;s a real-time overview of your company&rsquo;s workspace.</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-10">
         <StatCard icon={FolderKanban} label="Projects" value={projects.length} tone="signal" />
         <StatCard icon={Briefcase} label="Project managers" value={pms.length} tone="signal" />
         <StatCard icon={Users} label="Clients" value={clients.length} tone="signal" />
         <StatCard icon={CalendarClock} label="Due this week" value={dueThisWeek} tone="neutral" />
+        <StatCard
+          icon={DollarSign}
+          label="Revenue collected"
+          value={formatCurrency(revenue.paid)}
+          sub={revenue.billed > revenue.paid ? `${formatCurrency(revenue.billed - revenue.paid)} outstanding` : null}
+          tone="signal"
+        />
       </div>
 
       <ClientGlobe markers={countryMarkers} />
@@ -78,7 +87,7 @@ function countClientCountries(projects) {
     .sort((a, b) => b.count - a.count)
 }
 
-function StatCard({ icon: Icon, label, value, tone = 'signal' }) {
+function StatCard({ icon: Icon, label, value, sub, tone = 'signal' }) {
   const toneCls = tone === 'signal' ? 'bg-signal-light text-signal' : 'bg-paper text-slate'
   return (
     <div className="bg-surface border border-line rounded-card shadow-card p-6 flex flex-col justify-between h-[160px]">
@@ -88,9 +97,27 @@ function StatCard({ icon: Icon, label, value, tone = 'signal' }) {
       <div>
         <div className="font-display text-[28px] leading-none font-semibold tracking-tight text-ink mb-1">{value}</div>
         <div className="text-xs font-medium text-slate uppercase tracking-wide">{label}</div>
+        {sub && <div className="text-xs text-amber font-medium mt-1">{sub}</div>}
       </div>
     </div>
   )
+}
+
+// Rolls up every invoice across every stage of every project — company-wide
+// billed vs. paid, not scoped to a single project like InvoicesPanel's total.
+function sumRevenue(projects) {
+  let billed = 0
+  let paid = 0
+  for (const project of projects) {
+    for (const stage of project.stages || []) {
+      for (const invoice of stage.invoices || []) {
+        const amount = Number(invoice.amount) || 0
+        billed += amount
+        if (invoice.status === INVOICE_STATUS.PAID) paid += amount
+      }
+    }
+  }
+  return { billed, paid }
 }
 
 function ProjectsTab({ projects, pms, clients, profile, library }) {
@@ -123,7 +150,7 @@ function ProjectsTab({ projects, pms, clients, profile, library }) {
             <Link
               key={p.id}
               href={`/project/${p.id}`}
-              className="bg-surface/70 backdrop-blur border border-line rounded-card p-6 hover:shadow-card transition-shadow block"
+              className="card-hover bg-surface/70 backdrop-blur border border-line rounded-card p-6 hover:shadow-card block"
             >
               <div className="font-display text-xl font-semibold text-ink mb-2">{p.name}</div>
               <div className="text-sm text-slate space-y-1 mb-4">
