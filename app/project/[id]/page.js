@@ -15,6 +15,7 @@ import AuditLogPanel from '@/components/AuditLogPanel'
 import DocumentsPanel from '@/components/DocumentsPanel'
 import ResourcesPanel from '@/components/ResourcesPanel'
 import { newStage } from '@/lib/stages'
+import { countryOptions, findCountry } from '@/lib/countries'
 import { MOM_STATUS } from '@/lib/momEntries'
 import { AUDIT_ACTIONS, logAction as writeAuditLog } from '@/lib/auditLog'
 import { useStatusLibrary } from '@/lib/useStatusLibrary'
@@ -179,6 +180,11 @@ export default function ProjectDetailPage() {
     await updateDoc(doc(db, 'projects', id), { documents: nextDocuments })
   }
 
+  async function updateCountry(nextCountry) {
+    setProject((p) => ({ ...p, country: nextCountry }))
+    await updateDoc(doc(db, 'projects', id), { country: nextCountry })
+  }
+
   async function updateResources(nextResources) {
     setProject((p) => ({ ...p, resources: nextResources }))
     await updateDoc(doc(db, 'projects', id), { resources: nextResources })
@@ -223,7 +229,25 @@ export default function ProjectDetailPage() {
     <div className="min-h-screen bg-paper">
       <TopNav />
       <main className="max-w-[1440px] mx-auto px-8 py-8">
-        <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight mb-6">{project.name}</h1>
+        <div className="mb-6">
+          <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight">{project.name}</h1>
+          <div className="mt-1">
+            {canManage ? (
+              <select
+                value={project.country || ''}
+                onChange={(e) => updateCountry(e.target.value)}
+                className="text-sm text-slate bg-transparent border border-line rounded-lg px-2 py-1 outline-none focus:border-signal"
+              >
+                <option value="">No country set</option>
+                {countryOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              project.country && <span className="text-sm text-slate">{findCountry(project.country)?.name}</span>
+            )}
+          </div>
+        </div>
 
         <div className="flex gap-6 items-start">
           <aside className="w-72 flex-shrink-0 bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 flex flex-col gap-8 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">

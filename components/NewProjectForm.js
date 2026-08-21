@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { LabeledInput, LabeledSelect } from '@/components/FormFields'
+import { countryOptions } from '@/lib/countries'
 import { makeStages, makeDefaultStages } from '@/lib/stages'
 import { instantiateSections, defaultSections } from '@/lib/resources'
 import { resolveStatusKind, activeStatuses, STATUS_KINDS, DEFAULT_STATUSES } from '@/lib/statusLibrary'
@@ -25,6 +26,7 @@ export default function NewProjectForm({ profile, pms, clients, fixedPmId, pmMap
   const [name, setName] = useState('')
   const [pmId, setPmId] = useState('')
   const [clientId, setClientId] = useState('')
+  const [country, setCountry] = useState('')
   const [roadmapTemplateId, setRoadmapTemplateId] = useState('')
   const [resourceTemplateId, setResourceTemplateId] = useState('')
   const [busy, setBusy] = useState(false)
@@ -67,6 +69,7 @@ export default function NewProjectForm({ profile, pms, clients, fixedPmId, pmMap
         name,
         pmId: finalPmId,
         clientId,
+        country,
         stages,
         statusSetIds,
         resources,
@@ -82,6 +85,7 @@ export default function NewProjectForm({ profile, pms, clients, fixedPmId, pmMap
       setName('')
       setPmId('')
       setClientId('')
+      setCountry('')
       setRoadmapTemplateId('')
       setResourceTemplateId('')
       onDone?.()
@@ -97,6 +101,7 @@ export default function NewProjectForm({ profile, pms, clients, fixedPmId, pmMap
       <LabeledInput label="Project name" value={name} onChange={setName} />
       {!fixedPmId && <LabeledSelect label="Project manager" value={pmId} onChange={setPmId} options={pms} empty="No PMs yet" />}
       <LabeledSelect label="Client" value={clientId} onChange={setClientId} options={clients} empty="No clients yet" />
+      <LabeledSelect label="Country" value={country} onChange={setCountry} options={countryOptions} empty="No countries" />
       <LabeledSelect label="Roadmap template" value={roadmapTemplateId} onChange={setRoadmapTemplateId} options={roadmapOptions} empty="No templates — default roadmap" />
       <LabeledSelect label="Requirement sheet template" value={resourceTemplateId} onChange={setResourceTemplateId} options={resourceOptions} empty="No templates — blank sheet" />
       <button

@@ -10,6 +10,8 @@ import { resolveStatusKind } from '@/lib/statusLibrary'
 import NewProjectForm from '@/components/NewProjectForm'
 import EmptyState from '@/components/EmptyState'
 import ProgressBar from '@/components/ProgressBar'
+import ClientGlobe from '@/components/ClientGlobe'
+import { findCountry } from '@/lib/countries'
 
 export default function AdminProjectsPage() {
   const { profile } = useAuth()
@@ -17,6 +19,7 @@ export default function AdminProjectsPage() {
   const { library } = useStatusLibrary(profile?.companyId, true)
 
   const dueThisWeek = useMemo(() => countStagesDueThisWeek(projects, library), [projects, library])
+  const countryMarkers = useMemo(() => countClientCountries(projects), [projects])
 
   return (
     <div>
@@ -33,6 +36,8 @@ export default function AdminProjectsPage() {
         <StatCard icon={Users} label="Clients" value={clients.length} tone="signal" />
         <StatCard icon={CalendarClock} label="Due this week" value={dueThisWeek} tone="neutral" />
       </div>
+
+      <ClientGlobe markers={countryMarkers} />
 
       <ProjectsTab projects={projects} pms={pms} clients={clients} profile={profile} library={library} />
     </div>
@@ -54,6 +59,23 @@ function countStagesDueThisWeek(projects, library) {
     }
   }
   return count
+}
+
+// One marker per unique country with >= 1 client project — count is the
+// number of projects in that country (shown in ClientGlobe's legend).
+function countClientCountries(projects) {
+  const counts = {}
+  for (const p of projects) {
+    if (!p.country) continue
+    counts[p.country] = (counts[p.country] || 0) + 1
+  }
+  return Object.entries(counts)
+    .map(([code, count]) => {
+      const c = findCountry(code)
+      return c ? { id: code, name: c.name, lat: c.lat, lng: c.lng, count } : null
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.count - a.count)
 }
 
 function StatCard({ icon: Icon, label, value, tone = 'signal' }) {
