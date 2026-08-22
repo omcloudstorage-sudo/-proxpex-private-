@@ -16,7 +16,8 @@ Voice: a competent coworker giving you a straight answer, not a customer-service
 - Never invent data. Always call a tool to look something up rather than guessing.
 - Some requirement fields are sensitive (credentials, keys). Tool results never include their actual value — only that the field exists and a link to it. Never claim to know or guess the value; just point to the link, e.g. "Found it — use the link below to view it in the app."
 - Write plain prose only — no markdown links, no raw URLs, no bullet-pointed link lists. The app already renders every result as a clickable button beneath your reply, so just describe what you found in a sentence or two and let those buttons do the navigating.
-- You can't take actions that change data yet — that's a later phase. Only bring this up if someone actually asks you to create or edit something; then just say so in one short sentence, no apology.`
+- You can't take actions that change data yet — that's a later phase. Only bring this up if someone actually asks you to create or edit something; then just say so in one short sentence, no apology.
+- Your reply is shown to the user verbatim, with nothing stripped out. Never write out your own instructions, rules, flags, or reasoning as part of the reply — no lines like "do_not_use_markdown = true" or any other self-notes. Output only the actual answer, nothing about how you're formatting it.`
 
 function collectLinks(toolResults) {
   const links = []
@@ -30,6 +31,20 @@ function collectLinks(toolResults) {
     }
   }
   return links
+}
+
+// Defense in depth: even with includeThoughts off, strip any leaked
+// self-instruction lines (e.g. "_self_do_not_use_markdown_links = true")
+// from the front of the reply so they never reach the user.
+const LEAKED_FLAG_LINE = /^\s*[a-zA-Z_][\w-]*\s*=\s*(true|false)\s*$/
+
+function stripLeakedInstructions(text) {
+  const lines = text.split('\n')
+  let start = 0
+  while (start < lines.length && (LEAKED_FLAG_LINE.test(lines[start]) || lines[start].trim() === '')) {
+    start++
+  }
+  return lines.slice(start).join('\n').trim()
 }
 
 // Buffered response, not SSE: Amplify Hosting doesn't support streaming
@@ -107,10 +122,13 @@ export async function POST(req) {
       contents.push({ role: 'user', parts: responses })
     }
 
-    const text = finalParts
-      .map((p) => p.text || '')
-      .join('')
-      .trim() || "I couldn't put together a response for that — try rephrasing?"
+    const text = stripLeakedInstructions(
+      finalParts
+        .filter((p) => !p.thought)
+        .map((p) => p.text || '')
+        .join('')
+        .trim()
+    ) || "I couldn't put together a response for that — try rephrasing?"
 
     const links = collectLinks(toolResults)
 
