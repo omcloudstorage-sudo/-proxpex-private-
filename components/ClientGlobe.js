@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import createGlobe from 'cobe'
 
 // Reads a "r g b" CSS custom property (as used throughout globals.css) and
@@ -15,83 +15,120 @@ function readColorVar(name, fallback) {
   return parts.map((v) => v / 255)
 }
 
+// cobe's own "focus" recipe: converts a lat/lng into the [phi, theta]
+// rotation that puts that point facing the camera.
+function locationToAngles(lat, lng) {
+  return [Math.PI - ((lng * Math.PI) / 180 - Math.PI / 2), (lat * Math.PI) / 180]
+}
+
 // Admin-dashboard-only widget: an auto-rotating dot globe (cobe — small,
 // canvas-based, built for exactly this look) marking countries that have
 // at least one client project. Deliberately dark-panelled regardless of
 // site theme, echoing the reference "region map" style, with markers in
 // the app's current brand-blue accent so an accent-color change (see
 // ThemeContext) is picked up without touching this file.
-export default function ClientGlobe({ markers }) {
+//
+// `focusedId` (a marker id) rotates the globe to face that marker and
+// highlights it; pass null to resume free auto-rotation.
+export default function ClientGlobe({ markers, focusedId = null }) {
   const canvasRef = useRef(null)
+  const wrapRef = useRef(null)
+  const globeRef = useRef(null)
+  const rotationRef = useRef({ phi: 0, theta: 0.3, targetPhi: null, targetTheta: 0.3 })
+  const [ready, setReady] = useState(false)
 
   const globeMarkers = useMemo(
-    () => markers.map((m) => ({ location: [m.lat, m.lng], size: 0.06 })),
-    [markers]
+    () =>
+      markers.map((m) => ({
+        location: [m.lat, m.lng],
+        size: m.id === focusedId ? 0.11 : 0.055,
+      })),
+    [markers, focusedId]
   )
 
+  // Create the globe once and keep it alive across marker/focus changes —
+  // recreating it on every selection would snap rotation back to zero
+  // instead of animating smoothly to the newly focused marker.
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const wrap = wrapRef.current
+    if (!canvas || !wrap) return
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const signal = readColorVar('--color-signal', [0.114, 0.306, 0.847])
+    const rotation = rotationRef.current
+    let width = 0
 
-    let phi = 0
-    let width = canvas.offsetWidth
-
-    const onResize = () => {
-      if (canvas) width = canvas.offsetWidth
+    function createOrResize() {
+      width = wrap.offsetWidth
+      if (!width) return
+      if (globeRef.current) globeRef.current.destroy()
+      globeRef.current = createGlobe(canvas, {
+        devicePixelRatio: 2,
+        width: width * 2,
+        height: width * 2,
+        phi: rotation.phi,
+        theta: rotation.theta,
+        dark: 1,
+        diffuse: 1.2,
+        mapSamples: 18000,
+        mapBrightness: 7,
+        baseColor: [0.25, 0.29, 0.36],
+        markerColor: signal,
+        glowColor: signal,
+        markers: globeMarkers,
+        onRender: (state) => {
+          if (rotation.targetPhi !== null) {
+            rotation.phi += (rotation.targetPhi - rotation.phi) * 0.06
+            rotation.theta += (rotation.targetTheta - rotation.theta) * 0.06
+          } else if (!prefersReducedMotion) {
+            rotation.phi += 0.0035
+          }
+          state.phi = rotation.phi
+          state.theta = rotation.theta
+          state.width = width * 2
+          state.height = width * 2
+        },
+      })
+      setReady(true)
     }
-    window.addEventListener('resize', onResize)
 
-    const globe = createGlobe(canvas, {
-      devicePixelRatio: 2,
-      width: width * 2,
-      height: width * 2,
-      phi: 0,
-      theta: 0.3,
-      dark: 1,
-      diffuse: 1.2,
-      mapSamples: 16000,
-      mapBrightness: 6,
-      baseColor: [0.2, 0.23, 0.29],
-      markerColor: signal,
-      glowColor: signal,
-      markers: globeMarkers,
-      onRender: (state) => {
-        if (!prefersReducedMotion) phi += 0.0045
-        state.phi = phi
-        state.width = width * 2
-        state.height = width * 2
-      },
-    })
+    const ro = new ResizeObserver(() => createOrResize())
+    ro.observe(wrap)
 
     return () => {
-      globe.destroy()
-      window.removeEventListener('resize', onResize)
+      ro.disconnect()
+      if (globeRef.current) {
+        globeRef.current.destroy()
+        globeRef.current = null
+      }
     }
-  }, [globeMarkers])
+    // Intentionally created once — marker/focus updates below patch the
+    // live globe instead of tearing it down.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Push marker and focus-target updates into the live globe without
+  // recreating it.
+  useEffect(() => {
+    const focusEntry = focusedId ? markers.find((m) => m.id === focusedId) : null
+    if (focusEntry) {
+      const [p, t] = locationToAngles(focusEntry.lat, focusEntry.lng)
+      rotationRef.current.targetPhi = p
+      rotationRef.current.targetTheta = t
+    } else {
+      rotationRef.current.targetPhi = null
+    }
+    globeRef.current?.update({ markers: globeMarkers })
+  }, [globeMarkers, focusedId, markers])
 
   return (
-    <div className="bg-[rgb(12,19,36)] border border-line rounded-card shadow-card p-6 mb-10 flex flex-col sm:flex-row gap-6 items-center">
-      <div className="relative w-[180px] h-[180px] flex-shrink-0 mx-auto sm:mx-0">
-        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', cursor: 'grab' }} />
-      </div>
-      <div className="flex-1 min-w-0 w-full">
-        <div className="text-xs font-medium text-slate-light uppercase tracking-wide mb-3">Client locations</div>
-        {markers.length === 0 ? (
-          <p className="text-sm text-slate-light">No client countries recorded yet — set a country on a project to see it here.</p>
-        ) : (
-          <ul className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-            {markers.map((m) => (
-              <li key={m.id} className="flex items-center justify-between gap-3 text-sm text-slate-light">
-                <span className="truncate">{m.name}</span>
-                <span className="text-white font-medium flex-shrink-0">{m.count}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+    <div
+      ref={wrapRef}
+      className="relative w-full max-w-[520px] aspect-square mx-auto"
+      style={{ opacity: ready ? 1 : 0, transition: 'opacity 400ms ease-out' }}
+    >
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', cursor: 'grab' }} />
     </div>
   )
 }

@@ -88,6 +88,28 @@ body {
   animation: card-pop 350ms ease-out both;
 }
 
+/* Slightly more travel than .card-pop — used for the dashboard stat-card
+   row, where each card is meant to visibly stagger in via animation-delay
+   set inline per card, rather than all popping at once. */
+@keyframes stat-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.stat-pop {
+  animation: stat-pop 420ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stat-pop {
+    animation: none;
+  }
+}
+
 /* Glass surface: translucent card body over a blurred backdrop. Pair with
    a bg-surface/NN utility on the element (opacity is chosen per-context). */
 .glass {

@@ -10,6 +10,10 @@ import EntryModal from '@/components/EntryModal'
 import PulseDot from '@/components/PulseDot'
 import InvoicesPanel from '@/components/InvoicesPanel'
 
+// Invoices UI is paused company-wide until real payment processing (Stripe)
+// ships in a later round. Data/logic stays intact — flip this back on then.
+const INVOICES_UI_ENABLED = false
+
 export default function StagePanel({
   stage,
   canManage,
@@ -158,13 +162,15 @@ export default function StagePanel({
         </div>
       </div>
 
-      <InvoicesPanel
-        invoices={local.invoices}
-        canManage={canManage}
-        onChange={(invoices) => commit({ invoices })}
-        logAction={logAction}
-        stageName={local.name}
-      />
+      {INVOICES_UI_ENABLED && (
+        <InvoicesPanel
+          invoices={local.invoices}
+          canManage={canManage}
+          onChange={(invoices) => commit({ invoices })}
+          logAction={logAction}
+          stageName={local.name}
+        />
+      )}
     </div>
   )
 }
