@@ -293,7 +293,7 @@ export default function RexWidget() {
         onClick={() => setOpen((o) => !o)}
         aria-label="Open Rex, your Proxpex assistant"
         className={[
-          'fixed z-40 w-16 h-16 rounded-2xl bg-surface border border-line shadow-card hover:shadow-glow flex items-center justify-center p-4',
+          'fixed z-40 w-16 h-16 flex items-center justify-center p-2',
           pos ? '' : 'bottom-6 right-6',
         ].join(' ')}
         style={
@@ -301,8 +301,8 @@ export default function RexWidget() {
             ? {
                 left: pos.left,
                 top: pos.top,
-                transitionProperty: roamEffective ? 'left, top, box-shadow' : 'box-shadow',
-                transitionDuration: `${pos.duration}ms, ${pos.duration}ms, 150ms`,
+                transitionProperty: roamEffective ? 'left, top' : 'none',
+                transitionDuration: `${pos.duration}ms`,
                 transitionTimingFunction: 'cubic-bezier(0.3, 0.85, 0.4, 1)',
               }
             : undefined
