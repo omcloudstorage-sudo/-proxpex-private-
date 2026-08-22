@@ -267,10 +267,10 @@ function ProjectDetailPageInner() {
   return (
     <div className="min-h-screen page-fade">
       <TopNav />
-      <main className="max-w-[1440px] mx-auto px-8 py-8">
+      <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
           <div>
-            <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight">{project.name}</h1>
+            <h1 className="font-display text-[28px] sm:text-[36px] leading-[1.2] font-bold text-ink tracking-tight">{project.name}</h1>
             <div className="mt-1">
               {canManage ? (
                 <select
@@ -296,8 +296,8 @@ function ProjectDetailPageInner() {
           )}
         </div>
 
-        <div className="flex gap-6 items-start">
-          <aside className="w-72 flex-shrink-0 bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 flex flex-col gap-8 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          <aside className="w-full lg:w-72 flex-shrink-0 bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 flex flex-col gap-8 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] overflow-y-auto">
             <div>
               <div className="flex items-center justify-between mb-2 text-xs">
                 <span className="text-slate font-semibold uppercase tracking-wide">{doneStages} of {stages.length} stages done</span>
