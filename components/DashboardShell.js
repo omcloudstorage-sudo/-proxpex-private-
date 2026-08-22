@@ -63,18 +63,6 @@ export default function DashboardShell({ navItems, primaryAction, children }) {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={(e) => {
-                  // Sidebar-only, section-change-only: skip re-clicking the
-                  // active item, and skip when the sidebar is off-canvas
-                  // (mobile drawer) since there's nowhere on-screen to run to.
-                  if (active || window.innerWidth < 1024) return
-                  const r = e.currentTarget.getBoundingClientRect()
-                  window.dispatchEvent(
-                    new CustomEvent('rex:navigate', {
-                      detail: { rect: { left: r.left, top: r.top, width: r.width, height: r.height }, label: item.label },
-                    })
-                  )
-                }}
                 className={[
                   'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
                   active ? 'bg-signal-light text-signal shadow-glow' : 'text-slate hover:text-ink hover:bg-paper',

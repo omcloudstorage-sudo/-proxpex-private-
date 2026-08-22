@@ -9,13 +9,15 @@ import { useRexPreferences } from '@/contexts/RexPreferencesContext'
 
 const MAX_MESSAGES = 25
 
-// Launcher box size + rest-corner margin — kept in sync with the w-16
-// (64px) button below and its old bottom-6/right-6 (24px) position, so
-// switching to roaming doesn't shift Rex's resting spot.
-const SIZE = 64
+// Launcher box — small and tight to the actual sprite (see the render
+// below: this is the *only* clickable area, everything else has
+// pointer-events: none so Rex never blocks a click, even mid-roam).
+const SIZE = 44
 const MARGIN = 24
 const JUMP_MS = 380
-const HOLD_MS = 3500
+const IDLE_MIN_MS = 5000
+const IDLE_MAX_MS = 20000
+const MIN_TRIP_PX = 120
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -177,50 +179,108 @@ export default function RexWidget() {
     setPos(restPos())
   }
 
-  // Run to a clicked sidebar item, jump, hold, then wander back to the
-  // resting corner — settling near the section reads as "acknowledging"
-  // the click, but returning home afterward keeps him from permanently
-  // parking on top of sidebar text.
-  function runTo(rect) {
-    if (!roamEffective || open) return
-    clearTimers()
-    restingRef.current = false
+  function randRange(min, max) {
+    return min + Math.random() * (max - min)
+  }
 
-    const target = {
-      left: Math.min(rect.left + rect.width + 8, window.innerWidth - SIZE - 8),
-      top: Math.max(8, Math.min(rect.top + rect.height / 2 - SIZE / 2, window.innerHeight - SIZE - 8)),
-    }
+  // Best-effort "is this point over something I shouldn't land on" check —
+  // a single elementFromPoint hit-test, not a layout scan, so it stays
+  // cheap even though it's the thing gating every move. Rejects anything
+  // interactive (button/link/input/etc.) and any leaf element that itself
+  // carries visible text (a heading, a label, a card title) — but not a
+  // plain container div, which is what most card padding/gutters are.
+  // Generalizes to any page layout since it only looks at what's actually
+  // rendered at that pixel, never at a specific component tree shape.
+  function pointBlocked(x, y) {
+    const el = document.elementFromPoint(x, y)
+    if (!el || el.closest('[data-rex-launcher]')) return false
+    if (el.closest('button, a, [role="button"], input, textarea, select, label, [contenteditable="true"]')) return true
+    if (el.children.length === 0 && (el.textContent || '').trim().length > 0) return true
+    return false
+  }
+
+  // Picks a random point anywhere in the viewport that isn't sitting on
+  // content, biased toward "just try somewhere else" rather than any
+  // specific safe zone — a handful of cheap hit-tests per attempt, so
+  // even a full 10-try miss is negligible work. Returns null if nothing
+  // panned out this round (caller just retries soon after).
+  function pickDestination() {
+    const maxLeft = window.innerWidth - MARGIN - SIZE
+    const maxTop = window.innerHeight - MARGIN - SIZE
+    if (maxLeft <= MARGIN || maxTop <= MARGIN) return null
     const from = posRef.current || restPos()
-    const goDuration = tripDuration(from, target)
+
+    for (let i = 0; i < 10; i++) {
+      const left = randRange(MARGIN, maxLeft)
+      const top = randRange(MARGIN, maxTop)
+      if (Math.hypot(left - from.left, top - from.top) < MIN_TRIP_PX) continue
+      if (pointBlocked(left + SIZE / 2, top + SIZE / 2)) continue
+      return { left, top }
+    }
+    return null
+  }
+
+  function scheduleNextMove(delay) {
+    after(delay ?? randRange(IDLE_MIN_MS, IDLE_MAX_MS), doMove)
+  }
+
+  // The whole ambient loop: pick somewhere new, run there (sometimes with
+  // a hop partway through), sometimes hop again on arrival, then go idle
+  // for a random stretch before picking the next spot. Timer-driven, not
+  // a rAF loop — CSS handles the actual motion between waypoints.
+  function doMove() {
+    if (!roamEffective || open) return
+    const target = pickDestination()
+    if (!target) {
+      scheduleNextMove(randRange(1500, 3000)) // no safe spot this round — try again soon
+      return
+    }
+
+    restingRef.current = false
+    const from = posRef.current || restPos()
+    const duration = tripDuration(from, target)
+    const jumpMode = Math.random() < 0.55 ? (Math.random() < 0.5 ? 'mid' : 'arrival') : 'none'
 
     setMotion('running')
-    setPos({ ...target, duration: goDuration })
+    setPos({ ...target, duration })
 
-    after(goDuration, () => {
-      setMotion('jumping')
-      after(JUMP_MS, () => {
-        setMotion('idle')
-        after(HOLD_MS, () => {
-          if (open) return
-          restingRef.current = true
-          const home = restPos()
-          const backDuration = tripDuration(target, home)
-          setMotion('running')
-          setPos({ ...home, duration: backDuration })
-          after(backDuration, () => setMotion('idle'))
-        })
+    if (jumpMode === 'mid') {
+      after(Math.round(duration * randRange(0.35, 0.65)), () => {
+        setMotion('jumping')
+        after(JUMP_MS, () => setMotion('running'))
       })
+    }
+
+    after(duration, () => {
+      function settle() {
+        setMotion('idle')
+        restingRef.current = true
+        scheduleNextMove()
+      }
+      if (jumpMode === 'arrival') {
+        setMotion('jumping')
+        after(JUMP_MS, settle)
+      } else {
+        settle()
+      }
     })
   }
 
-  // Sidebar nav dispatches this on an actual section change (see
-  // DashboardShell) — not on every click in the app.
+  // The self-sustaining loop: (re)started whenever roaming turns on/off
+  // or the chat opens/closes, torn down otherwise. Each doMove() call
+  // schedules its own successor via setTimeout, so once started this
+  // keeps going indefinitely without this effect re-running.
   useEffect(() => {
-    function onNav(e) {
-      runTo(e.detail.rect)
+    if (!roamEffective) {
+      goRestNow()
+      return
     }
-    window.addEventListener('rex:navigate', onNav)
-    return () => window.removeEventListener('rex:navigate', onNav)
+    if (open) {
+      clearTimers()
+      return
+    }
+    scheduleNextMove()
+    return () => clearTimers()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roamEffective, open])
 
@@ -231,13 +291,6 @@ export default function RexWidget() {
     if (open) goRestNow()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
-
-  // Toggling roaming off (Settings, or reduced-motion kicking in
-  // mid-session) cancels any run in progress and snaps home.
-  useEffect(() => {
-    if (!roamEffective) goRestNow()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roamEffective])
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
@@ -289,15 +342,15 @@ export default function RexWidget() {
 
   return (
     <>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Open Rex, your Proxpex assistant"
-        className={[
-          'fixed z-40 w-16 h-16 flex items-center justify-center p-2',
-          pos ? '' : 'bottom-6 right-6',
-        ].join(' ')}
-        style={
-          pos
+      {/* Outer box is pointer-events: none — it's just a positioning frame,
+          it never blocks a click. Only the tightly-sized button inside,
+          matching the sprite itself, is actually clickable. */}
+      <div
+        className={['fixed z-40 pointer-events-none', pos ? '' : 'bottom-6 right-6'].join(' ')}
+        style={{
+          width: SIZE,
+          height: SIZE,
+          ...(pos
             ? {
                 left: pos.left,
                 top: pos.top,
@@ -305,11 +358,18 @@ export default function RexWidget() {
                 transitionDuration: `${pos.duration}ms`,
                 transitionTimingFunction: 'cubic-bezier(0.3, 0.85, 0.4, 1)',
               }
-            : undefined
-        }
+            : {}),
+        }}
       >
-        <RexIcon variant="compact" state={open ? 'idle' : busy ? rexState : motion} still={!roamEffective} />
-      </button>
+        <button
+          data-rex-launcher
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Open Rex, your Proxpex assistant"
+          className="pointer-events-auto w-full h-full flex items-center justify-center"
+        >
+          <RexIcon variant="compact" state={open ? 'idle' : busy ? rexState : motion} still={!roamEffective} />
+        </button>
+      </div>
 
       {open && (
         <div className="fixed bottom-24 right-6 z-40 w-[22rem] max-h-[32rem] bg-surface border border-line rounded-card shadow-card flex flex-col overflow-hidden card-pop">
