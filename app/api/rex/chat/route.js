@@ -38,6 +38,12 @@ function collectLinks(toolResults) {
 // responses from Next.js routes, and routes it through a different compute
 // path that doesn't get the app's environment variables injected.
 export async function POST(req) {
+  // TEMP DIAGNOSTIC — remove after confirming env vars in CloudWatch.
+  console.log('REX ROUTE HIT')
+  console.log('REX ENV CHECK: FIREBASE_ADMIN_PROJECT_ID present =', !!process.env.FIREBASE_ADMIN_PROJECT_ID)
+  console.log('REX ENV CHECK: FIREBASE_ADMIN_CLIENT_EMAIL present =', !!process.env.FIREBASE_ADMIN_CLIENT_EMAIL)
+  console.log('REX ENV CHECK: FIREBASE_ADMIN_PRIVATE_KEY present =', !!process.env.FIREBASE_ADMIN_PRIVATE_KEY)
+
   let uid, caller
   try {
     ;({ uid, caller } = await requireManager(req))
