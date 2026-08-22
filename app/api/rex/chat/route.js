@@ -20,10 +20,6 @@ Voice: a competent coworker giving you a straight answer, not a customer-service
 - Write plain prose only — no markdown links, no raw URLs, no bullet-pointed link lists. The app already renders every result as a clickable button beneath your reply, so just describe what you found in a sentence or two and let those buttons do the navigating.
 - You can't take actions that change data yet — that's a later phase. Only bring this up if someone actually asks you to create or edit something; then just say so in one short sentence, no apology.`
 
-function sse(controller, encoder, obj) {
-  controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
-}
-
 function collectLinks(toolResults) {
   const links = []
   for (const { name, data } of toolResults) {
@@ -38,9 +34,10 @@ function collectLinks(toolResults) {
   return links
 }
 
+// Buffered response, not SSE: Amplify Hosting doesn't support streaming
+// responses from Next.js routes, and routes it through a different compute
+// path that doesn't get the app's environment variables injected.
 export async function POST(req) {
-  const encoder = new TextEncoder()
-
   let uid, caller
   try {
     ;({ uid, caller } = await requireManager(req))
@@ -67,77 +64,54 @@ export async function POST(req) {
     return Response.json({ error: 'This conversation has reached its limit — start a new one.' }, { status: 400 })
   }
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        sse(controller, encoder, { type: 'phase', phase: 'searching' })
+  try {
+    const contents = [
+      ...priorTurns.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.text }] })),
+      { role: 'user', parts: [{ text: message }] },
+    ]
 
-        const contents = [
-          ...priorTurns.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.text }] })),
-          { role: 'user', parts: [{ text: message }] },
-        ]
+    const toolResults = []
+    let finalParts = []
 
-        const toolResults = []
-        let finalParts = []
-        let usedTool = false
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const parts = await callGemini({ systemPrompt: SYSTEM_PROMPT, contents, tools: REX_TOOL_DECLARATIONS })
+      const functionCalls = parts.filter((p) => p.functionCall)
 
-        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          const parts = await callGemini({ systemPrompt: SYSTEM_PROMPT, contents, tools: REX_TOOL_DECLARATIONS })
-          const functionCalls = parts.filter((p) => p.functionCall)
-
-          if (functionCalls.length === 0) {
-            finalParts = parts
-            break
-          }
-
-          usedTool = true
-          contents.push({ role: 'model', parts })
-
-          const responses = await Promise.all(
-            functionCalls.map(async (p) => {
-              const { name, args, id } = p.functionCall
-              let data
-              try {
-                data = await executeRexTool(rexCaller, name, args)
-              } catch (err) {
-                data = { error: err.message || 'Tool failed.' }
-              }
-              toolResults.push({ name, data })
-              // Gemini 3.x matches a function response back to its call by
-              // id — required when multiple calls run in the same turn, and
-              // harmless to always include. `name` must still match too.
-              return { functionResponse: { id, name, response: data } }
-            })
-          )
-          contents.push({ role: 'user', parts: responses })
-
-          if (round === 0) sse(controller, encoder, { type: 'phase', phase: 'writing' })
-        }
-
-        if (!usedTool) sse(controller, encoder, { type: 'phase', phase: 'writing' })
-
-        const text = finalParts
-          .map((p) => p.text || '')
-          .join('')
-          .trim() || "I couldn't put together a response for that — try rephrasing?"
-
-        const links = collectLinks(toolResults)
-
-        sse(controller, encoder, { type: 'result', text, links })
-        sse(controller, encoder, { type: 'done' })
-      } catch (err) {
-        sse(controller, encoder, { type: 'error', message: err.message || 'Something went wrong.' })
-      } finally {
-        controller.close()
+      if (functionCalls.length === 0) {
+        finalParts = parts
+        break
       }
-    },
-  })
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-    },
-  })
+      contents.push({ role: 'model', parts })
+
+      const responses = await Promise.all(
+        functionCalls.map(async (p) => {
+          const { name, args, id } = p.functionCall
+          let data
+          try {
+            data = await executeRexTool(rexCaller, name, args)
+          } catch (err) {
+            data = { error: err.message || 'Tool failed.' }
+          }
+          toolResults.push({ name, data })
+          // Gemini 3.x matches a function response back to its call by
+          // id — required when multiple calls run in the same turn, and
+          // harmless to always include. `name` must still match too.
+          return { functionResponse: { id, name, response: data } }
+        })
+      )
+      contents.push({ role: 'user', parts: responses })
+    }
+
+    const text = finalParts
+      .map((p) => p.text || '')
+      .join('')
+      .trim() || "I couldn't put together a response for that — try rephrasing?"
+
+    const links = collectLinks(toolResults)
+
+    return Response.json({ text, links })
+  } catch (err) {
+    return Response.json({ error: err.message || 'Something went wrong.' }, { status: 500 })
+  }
 }

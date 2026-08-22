@@ -12,7 +12,7 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function streamChat({ message, history, onEvent }) {
+async function askRex({ message, history }) {
   const idToken = await auth.currentUser.getIdToken()
   const res = await fetch('/api/rex/chat', {
     method: 'POST',
@@ -20,31 +20,9 @@ async function streamChat({ message, history, onEvent }) {
     body: JSON.stringify({ message, history }),
   })
 
-  if (!res.ok || !res.body) {
-    const data = await res.json().catch(() => ({}))
-    onEvent({ type: 'error', message: data.error || 'Something went wrong.' })
-    return
-  }
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const chunks = buffer.split('\n\n')
-    buffer = chunks.pop()
-    for (const chunk of chunks) {
-      if (!chunk.startsWith('data: ')) continue
-      try {
-        onEvent(JSON.parse(chunk.slice(6)))
-      } catch {
-        // ignore malformed chunk
-      }
-    }
-  }
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) return { error: data.error || 'Something went wrong.' }
+  return { text: data.text, links: data.links }
 }
 
 function ResultLink({ link, onNavigate }) {
@@ -152,20 +130,12 @@ export default function RexWidget() {
     const history = messages.map((m) => ({ role: m.role, text: m.text }))
     setMessages((m) => [...m, { role: 'user', text }])
 
-    let pending = null
-    await streamChat({
-      message: text,
-      history,
-      onEvent: (evt) => {
-        if (evt.type === 'phase') {
-          setRexState(evt.phase)
-        } else if (evt.type === 'result') {
-          pending = { role: 'assistant', text: evt.text, links: evt.links }
-        } else if (evt.type === 'error') {
-          pending = { role: 'assistant', text: `Sorry — ${evt.message}`, links: [] }
-        }
-      },
-    })
+    const result = await askRex({ message: text, history })
+    setRexState('writing')
+
+    const pending = result.error
+      ? { role: 'assistant', text: `Sorry — ${result.error}`, links: [] }
+      : { role: 'assistant', text: result.text, links: result.links }
 
     if (pending) {
       setRexState('found')
