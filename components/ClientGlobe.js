@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import createGlobe from 'cobe'
+import { useTheme } from '@/contexts/ThemeContext'
 
 // Reads a "r g b" CSS custom property (as used throughout globals.css) and
 // returns it as a [0-1, 0-1, 0-1] triple for cobe, which wants fractional
@@ -55,12 +56,24 @@ const THETA_LIMIT = 1.3 // radians — keeps drag from flipping the globe past i
 const DRAG_ROTATE_SPEED = 1 / 200
 const RESUME_DELAY_MS = 1200 // idle time after drag before auto-rotate/focus resumes
 
+// cobe's `dark` option is a real light/dark globe switch (0 = light sphere
+// with dark continents, 1 = dark sphere with light continents), not just a
+// brightness knob — verified by rendering both side by side. Everything
+// else (glow ring, markers) stays the same brand-blue accent in both.
+const GLOBE_THEME = {
+  light: { dark: 0, baseColor: [0.94, 0.95, 0.97], mapBrightness: 6 },
+  dark: { dark: 1, baseColor: [0.25, 0.29, 0.36], mapBrightness: 7 },
+}
+
 // Admin-dashboard-only widget: an auto-rotating dot globe (cobe — small,
 // canvas-based, built for exactly this look) marking countries that have
-// at least one client project. Deliberately dark-panelled regardless of
-// site theme, echoing the reference "region map" style, with markers in
-// the app's current brand-blue accent so an accent-color change (see
-// ThemeContext) is picked up without touching this file.
+// at least one client project. The globe itself follows the app's
+// light/dark theme (see ThemeContext) — a light sphere with dark
+// continents in light theme, inverted in dark theme — while the glow ring
+// around its edge stays the brand-blue accent in both. Markers use that
+// same accent, so an accent-color change is picked up without touching
+// this file (though only at next mount — see the theme-sync effect below
+// for why live accent swaps aren't handled).
 //
 // The `cobe` version pinned here (2.0.1) has no `onRender` animation-loop
 // hook — that option only exists in cobe's README example for an older
@@ -77,12 +90,14 @@ const RESUME_DELAY_MS = 1200 // idle time after drag before auto-rotate/focus re
 // tapping, for touch) any one of them brings just that label to full
 // opacity without changing the app's selection state.
 export default function ClientGlobe({ markers, focusedId = null, focusedLabel = null }) {
+  const { theme } = useTheme()
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const globeRef = useRef(null)
   const labelPosRef = useRef(null)
   const ambientElsRef = useRef({})
   const markersRef = useRef(markers)
+  const sizeRef = useRef(0)
   const rotationRef = useRef({ phi: 0, theta: 0.3, targetPhi: null, targetTheta: 0.3 })
   const focusedMarkerRef = useRef(null)
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, startPhi: 0, startTheta: 0, lastInteractionAt: 0 })
@@ -90,6 +105,7 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
   const [hoveredId, setHoveredId] = useState(null)
 
   markersRef.current = markers
+  const isDarkGlobe = theme !== 'light'
 
   const globeMarkers = useMemo(
     () =>
@@ -99,6 +115,20 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
       })),
     [markers, focusedId]
   )
+
+  // Positions an element using a single, pixel-snapped CSS transform rather
+  // than percentage left/top. Percentage positioning updated every render
+  // frame (the globe is always at least slowly auto-rotating) lands on
+  // fractional sub-pixel values almost every frame, which made the small,
+  // low-opacity ambient labels rasterize as a blurry smear instead of
+  // legible text — rounding to whole device pixels and driving the move
+  // through one composited `transform` fixes it.
+  function placeLabel(el, xFrac, yFrac, anchor) {
+    const size = sizeRef.current
+    const px = Math.round(xFrac * size)
+    const py = Math.round(yFrac * size)
+    el.style.transform = `translate(${px}px, ${py}px) ${anchor}`
+  }
 
   // Create the globe once and keep it alive across marker/focus changes —
   // recreating it on every selection would snap rotation back to zero
@@ -117,20 +147,20 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
 
     function start(width) {
       if (disposed) return
+      sizeRef.current = width
+      const palette = GLOBE_THEME[isDarkGlobe ? 'dark' : 'light']
       globeRef.current = createGlobe(canvas, {
         devicePixelRatio: 2,
         width: width * 2,
         height: width * 2,
         phi: rotation.phi,
         theta: rotation.theta,
-        dark: 1,
         diffuse: 1.2,
         mapSamples: 18000,
-        mapBrightness: 7,
-        baseColor: [0.25, 0.29, 0.36],
         markerColor: signal,
         glowColor: signal,
         markers: globeMarkers,
+        ...palette,
       })
       setReady(true)
 
@@ -151,8 +181,7 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
         const fm = focusedMarkerRef.current
         if (label && fm) {
           const { x, y, visible } = projectMarker(rotation.phi, rotation.theta, fm.lat, fm.lng)
-          label.style.left = `${x * 100}%`
-          label.style.top = `${y * 100}%`
+          placeLabel(label, x, y, 'translate(-50%, calc(-100% - 10px))')
           label.style.opacity = visible ? '1' : '0'
         }
 
@@ -160,8 +189,7 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
           const el = ambientElsRef.current[m.id]
           if (!el) continue
           const { x, y, visible } = projectMarker(rotation.phi, rotation.theta, m.lat, m.lng)
-          el.style.left = `${x * 100}%`
-          el.style.top = `${y * 100}%`
+          placeLabel(el, x, y, 'translate(-50%, calc(-100% - 6px))')
           el.style.opacity = visible ? '' : '0'
           el.style.pointerEvents = visible ? 'auto' : 'none'
         }
@@ -176,6 +204,7 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
     const ro = new ResizeObserver(() => {
       const width = wrap.offsetWidth
       if (!width) return
+      sizeRef.current = width
       if (!globeRef.current) start(width)
       else globeRef.current.update({ width: width * 2, height: width * 2 })
     })
@@ -225,8 +254,8 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
         globeRef.current = null
       }
     }
-    // Intentionally created once — marker/focus updates below patch the
-    // live globe instead of tearing it down.
+    // Intentionally created once — marker/focus/theme updates below patch
+    // the live globe instead of tearing it down.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -249,10 +278,27 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
     globeRef.current?.update({ markers: globeMarkers })
   }, [globeMarkers, focusedId, markers])
 
+  // Swap the sphere's own palette when the app's light/dark toggle changes
+  // — patched onto the live globe (no rotation-resetting recreate needed).
+  useEffect(() => {
+    globeRef.current?.update(GLOBE_THEME[isDarkGlobe ? 'dark' : 'light'])
+  }, [isDarkGlobe])
+
+  const pillClass = isDarkGlobe
+    ? 'bg-white text-[rgb(12,19,36)]'
+    : 'bg-[rgb(15,23,42)] text-white'
+  // Ambient pills keep an opaque background at all times — a translucent
+  // whole-pill (opacity < 1) let the globe's dot texture show through it,
+  // which is what was rendering as an illegible speckled/blurry box. The
+  // "faint vs. active" distinction is conveyed by text color instead.
+  const ambientPillBg = isDarkGlobe ? 'bg-white/95' : 'bg-[rgb(15,23,42)]/95'
+  const ambientTextActive = isDarkGlobe ? 'text-[rgb(12,19,36)]' : 'text-white'
+  const ambientTextFaint = 'text-slate-400'
+
   return (
     <div
       ref={wrapRef}
-      className="relative w-full max-w-[520px] aspect-square mx-auto touch-none select-none"
+      className="relative w-full max-w-[520px] aspect-square mx-auto rounded-full bg-paper touch-none select-none"
       style={{ opacity: ready ? 1 : 0, transition: 'opacity 400ms ease-out' }}
     >
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', cursor: 'grab' }} />
@@ -269,13 +315,13 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
             onMouseEnter={() => setHoveredId(m.id)}
             onMouseLeave={() => setHoveredId((cur) => (cur === m.id ? null : cur))}
             onClick={() => setHoveredId((cur) => (cur === m.id ? null : m.id))}
-            className="absolute z-[5] cursor-pointer"
-            style={{ transform: 'translate(-50%, calc(-100% - 6px))' }}
+            className="absolute top-0 left-0 z-[5] cursor-pointer"
           >
             <div
               className={[
-                'bg-white/90 text-[rgb(12,19,36)] text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap transition-opacity duration-200',
-                hoveredId === m.id ? 'opacity-100' : 'opacity-35',
+                'text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap transition-colors duration-200',
+                ambientPillBg,
+                hoveredId === m.id ? ambientTextActive : ambientTextFaint,
               ].join(' ')}
             >
               {m.name}
@@ -284,17 +330,13 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
         ))}
 
       {focusedId && focusedLabel && (
-        <div
-          ref={labelPosRef}
-          className="pointer-events-none absolute z-10"
-          style={{ transform: 'translate(-50%, calc(-100% - 10px))' }}
-        >
+        <div ref={labelPosRef} className="pointer-events-none absolute top-0 left-0 z-10">
           <div key={focusedId + focusedLabel} className="card-pop flex flex-col items-center">
-            <div className="bg-white text-[rgb(12,19,36)] text-xs font-semibold px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap max-w-[220px] truncate">
+            <div className={`${pillClass} text-xs font-semibold px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap max-w-[220px] truncate`}>
               {focusedLabel}
             </div>
             <svg width="12" height="7" viewBox="0 0 12 7" className="flex-shrink-0 -mt-px drop-shadow-sm">
-              <path d="M0 0 H12 L6 7 Z" fill="white" />
+              <path d="M0 0 H12 L6 7 Z" fill={isDarkGlobe ? 'white' : 'rgb(15,23,42)'} />
             </svg>
           </div>
         </div>
