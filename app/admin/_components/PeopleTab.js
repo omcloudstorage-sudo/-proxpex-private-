@@ -14,7 +14,7 @@ const AVATAR_TONES = [
   { bg: 'bg-sky-50', text: 'text-sky-600' },
 ]
 
-function toneFor(id) {
+export function toneFor(id) {
   let hash = 0
   for (const ch of id || '') hash = (hash + ch.charCodeAt(0)) % AVATAR_TONES.length
   return AVATAR_TONES[hash]
@@ -102,7 +102,7 @@ export default function PeopleTab({ people, role, title, pageTitle, subtitle, pm
   )
 }
 
-function PersonRow({ person, reportsTo }) {
+export function PersonRow({ person, reportsTo }) {
   const [mode, setMode] = useState('view') // 'view' | 'edit' | 'reset' | 'delete'
   const [name, setName] = useState(person.name)
   const [email, setEmail] = useState(person.email)

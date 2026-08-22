@@ -2,32 +2,31 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { FolderKanban, Building2 } from 'lucide-react'
+import { User, Building2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { usePmData } from '@/contexts/PmDataContext'
+import { useAdminData } from '@/contexts/AdminDataContext'
 import { useStatusLibrary } from '@/lib/useStatusLibrary'
 import { resolveStatusKind } from '@/lib/statusLibrary'
 import EmptyState from '@/components/EmptyState'
 import ProgressBar from '@/components/ProgressBar'
 
-export default function PmPage() {
+export default function AdminProjectsListPage() {
   const { profile } = useAuth()
-  const { projects, clients } = usePmData()
+  const { projects, pms, clients } = useAdminData()
   const { library } = useStatusLibrary(profile?.companyId, true)
 
-  const clientMap = useMemo(() => Object.fromEntries((clients || []).map((c) => [c.id, c.name])), [clients])
+  const pmMap = useMemo(() => Object.fromEntries(pms.map((p) => [p.id, p.name])), [pms])
+  const clientMap = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c.name])), [clients])
 
   return (
     <div className="page-fade">
       <div className="mb-8">
-        <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight">
-          {profile?.name ? `Welcome back, ${profile.name.split(' ')[0]}` : 'Your projects'}
-        </h1>
-        <p className="text-slate text-lg mt-1">Projects assigned to you as project manager.</p>
+        <h1 className="font-display text-[36px] leading-[1.2] font-bold text-ink tracking-tight">Projects</h1>
+        <p className="text-slate text-lg mt-1">Every project across your company&rsquo;s workspace.</p>
       </div>
 
       {projects.length === 0 ? (
-        <EmptyState icon={FolderKanban} text="No projects assigned to you yet — create one from the sidebar, or check with your company admin." />
+        <EmptyState text="No projects yet. Add a project manager and a client first, then create a project from the sidebar." />
       ) : (
         <div className="grid md:grid-cols-2 gap-6">
           {projects.map((p) => (
@@ -38,6 +37,7 @@ export default function PmPage() {
             >
               <div className="font-display text-xl font-semibold text-ink mb-2">{p.name}</div>
               <div className="text-sm text-slate space-y-1 mb-4">
+                <div className="flex items-center gap-1.5"><User className="w-[13px] h-[13px]" strokeWidth={2} /> <span className="font-medium">PM:</span> {pmMap[p.pmId] || '—'}</div>
                 <div className="flex items-center gap-1.5"><Building2 className="w-3 h-3" strokeWidth={2} /> <span className="font-medium">Client:</span> {clientMap[p.clientId] || '—'}</div>
               </div>
               <MiniProgress stages={p.stages || []} library={library} />

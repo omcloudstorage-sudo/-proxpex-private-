@@ -47,13 +47,13 @@ export default function DashboardShell({ navItems, primaryAction, children }) {
 
         {primaryAction && (
           <div className="px-4 pt-4 pb-4 border-t border-line/70">
-            <Link
-              href={primaryAction.href}
+            <button
+              onClick={primaryAction.onClick}
               className="flex items-center justify-center gap-2 w-full bg-signal text-white text-sm font-semibold px-4 py-3 rounded-lg shadow-card hover:bg-signal-dark hover:shadow-glow transition-all"
             >
               <Plus className="w-3.5 h-3.5" strokeWidth={3} />
               {primaryAction.label}
-            </Link>
+            </button>
           </div>
         )}
       </aside>
