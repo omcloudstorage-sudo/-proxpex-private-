@@ -1,6 +1,6 @@
 import { requireManager } from '@/lib/requireAdmin'
 import { callGemini } from '@/lib/gemini'
-import { REX_TOOL_DECLARATIONS, executeRexTool } from '@/lib/rexTools'
+import { REX_TOOL_DECLARATIONS, executeRexTool, resolvePageProject } from '@/lib/rexTools'
 
 const MAX_MESSAGES = 25
 const MAX_TOOL_ROUNDS = 3
@@ -73,7 +73,7 @@ export async function POST(req) {
     return Response.json({ error: 'Invalid request body.' }, { status: 400 })
   }
 
-  const { message, history } = body || {}
+  const { message, history, pageContext } = body || {}
   if (!message || typeof message !== 'string') {
     return Response.json({ error: 'Missing message.' }, { status: 400 })
   }
@@ -84,6 +84,17 @@ export async function POST(req) {
   }
 
   try {
+    // If the user was looking at a specific project when they opened Rex,
+    // let "here"/"this project" resolve without them naming it — same
+    // access check as any other tool call, just resolved once up front.
+    let systemPrompt = SYSTEM_PROMPT
+    if (pageContext?.type === 'project' && typeof pageContext.projectId === 'string') {
+      const pageProject = await resolvePageProject(rexCaller, pageContext.projectId)
+      if (pageProject) {
+        systemPrompt += `\n\nThe user currently has the project "${pageProject.projectName}" open on screen. If they say "here," "this project," or otherwise don't name a project, assume they mean this one — pass it as the projectName argument on tool calls. Don't mention this note itself.`
+      }
+    }
+
     const contents = [
       ...priorTurns.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.text }] })),
       { role: 'user', parts: [{ text: message }] },
@@ -93,7 +104,7 @@ export async function POST(req) {
     let finalParts = []
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const parts = await callGemini({ systemPrompt: SYSTEM_PROMPT, contents, tools: REX_TOOL_DECLARATIONS })
+      const parts = await callGemini({ systemPrompt, contents, tools: REX_TOOL_DECLARATIONS })
       const functionCalls = parts.filter((p) => p.functionCall)
 
       if (functionCalls.length === 0) {

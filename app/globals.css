@@ -329,15 +329,73 @@ body {
 .rex-icon-found.rex-icon-detailed svg { transform-origin: 72% 25%; }
 .rex-icon-found.rex-icon-compact svg { transform-origin: 75% 30%; }
 
+/* RUNNING: two-frame leg-swap stride (hard cuts via steps(), not a tween —
+   same crisp-pixel technique as the eye blink/jaw drop) layered under a
+   fast low-amplitude bob so the torso reads as pounding along, not
+   floating. Frames A/B are two full leg-pose groups (see RexIcon)
+   toggled by opposing steps() animations so exactly one is visible at
+   a time. */
+@keyframes rex-run-legs-a {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes rex-run-legs-b {
+  0%, 49% { opacity: 0; }
+  50%, 100% { opacity: 1; }
+}
+.rex-legs-a { animation: rex-run-legs-a 260ms steps(1) infinite; }
+.rex-legs-b { animation: rex-run-legs-b 260ms steps(1) infinite; }
+
+@keyframes rex-run-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8%); }
+}
+.rex-icon-running svg {
+  animation: rex-run-bob 260ms ease-in-out infinite;
+}
+
+/* JUMPING: one squash-and-stretch hop — a quick crouch (squash), a
+   stretched peak mid-air, then a landing squash — punctuating arrival
+   at a section. Plays once, not looped. */
+@keyframes rex-jump {
+  0% { transform: scale(1, 1) translateY(0); }
+  15% { transform: scale(1.15, 0.82) translateY(0); }
+  55% { transform: scale(0.92, 1.12) translateY(-32%); }
+  85% { transform: scale(1.1, 0.88) translateY(0); }
+  100% { transform: scale(1, 1) translateY(0); }
+}
+.rex-icon-jumping svg {
+  animation: rex-jump 380ms ease-out 1;
+}
+.rex-icon-jumping.rex-icon-compact svg { transform-origin: 50% 100%; }
+.rex-icon-jumping.rex-icon-detailed svg { transform-origin: 30% 100%; }
+
+/* Forced fully-static fallback (Settings toggle off) — every Rex
+   animation off regardless of state. Separate from the reduced-motion
+   query below since it's opt-in per user preference, not OS-level. */
+.rex-icon-still svg,
+.rex-icon-still .rex-eye,
+.rex-icon-still .rex-prop-sway,
+.rex-icon-still .rex-prop-write,
+.rex-icon-still .rex-scribble,
+.rex-icon-still .rex-legs-a,
+.rex-icon-still .rex-legs-b {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rex-icon-idle svg,
   .rex-icon-searching svg,
   .rex-icon-writing svg,
   .rex-icon-found svg,
+  .rex-icon-running svg,
+  .rex-icon-jumping svg,
   .rex-eye,
   .rex-prop-sway,
   .rex-prop-write,
-  .rex-scribble {
+  .rex-scribble,
+  .rex-legs-a,
+  .rex-legs-b {
     animation: none;
   }
 }

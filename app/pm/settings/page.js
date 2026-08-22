@@ -9,6 +9,7 @@ import PriorityLibraryPanel from '@/components/PriorityLibraryPanel'
 import RoadmapTemplatesPanel from '@/components/RoadmapTemplatesPanel'
 import ResourceTemplatesPanel from '@/components/ResourceTemplatesPanel'
 import AppearanceControls from '@/components/AppearanceControls'
+import RexPreferencesControls from '@/components/RexPreferencesControls'
 
 export default function PmSettingsPage() {
   const { profile, company } = useAuth()
@@ -36,6 +37,9 @@ export default function PmSettingsPage() {
         <div className="bg-surface border border-line rounded-card shadow-card p-6">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate mb-4">Appearance</h2>
           <AppearanceControls />
+          <div className="mt-5 pt-5 border-t border-line/70">
+            <RexPreferencesControls />
+          </div>
         </div>
       </div>
 

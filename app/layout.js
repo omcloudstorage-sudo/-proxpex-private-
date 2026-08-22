@@ -2,6 +2,7 @@ import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { RexPreferencesProvider } from '@/contexts/RexPreferencesContext'
 import EmberField from '@/components/EmberField'
 
 const display = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-display' })
@@ -35,7 +36,9 @@ export default function RootLayout({ children }) {
       <body className="font-body">
         <EmberField />
         <AuthProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <RexPreferencesProvider>{children}</RexPreferencesProvider>
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>
