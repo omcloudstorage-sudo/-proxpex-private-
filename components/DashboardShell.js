@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import Logo from '@/components/Logo'
 import UserMenu from '@/components/UserMenu'
+import RexWidget from '@/components/RexWidget'
 
 export default function DashboardShell({ navItems, primaryAction, children }) {
   const pathname = usePathname()
@@ -64,6 +65,7 @@ export default function DashboardShell({ navItems, primaryAction, children }) {
         </header>
         <main className="flex-1 px-10 py-10 max-w-6xl w-full mx-auto">{children}</main>
       </div>
+      <RexWidget />
     </div>
   )
 }

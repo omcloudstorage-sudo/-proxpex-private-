@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   doc, onSnapshot, updateDoc, collection, query, orderBy, limit,
   addDoc, deleteDoc, serverTimestamp,
@@ -31,14 +31,31 @@ function formatLastUpdated(ts) {
 }
 
 export default function ProjectDetailPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate text-sm">Loading…</div>}>
+      <ProjectDetailPageInner />
+    </Suspense>
+  )
+}
+
+function ProjectDetailPageInner() {
   const { id } = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, profile, loading: authLoading } = useAuth()
   const [project, setProject] = useState(null)
   const [notFound, setNotFound] = useState(false)
   const [activeStageId, setActiveStageId] = useState(null)
   const [momEntries, setMomEntries] = useState([])
   const [auditLog, setAuditLog] = useState([])
+
+  // Deep-link params — set by Rex's search results (and shareable in
+  // general): ?stage= selects a stage, ?section=resources|documents jumps
+  // to that panel, ?resourceSection=&resourceItem= focuses one requirements
+  // field within the (already-expanded) Resources modal.
+  const stageParam = searchParams.get('stage')
+  const sectionParam = searchParams.get('section')
+  const resourceItemParam = searchParams.get('resourceItem')
 
   useEffect(() => {
     if (!id) return
@@ -51,12 +68,23 @@ export default function ProjectDetailPage() {
         }
         const data = { id: snap.id, ...snap.data() }
         setProject(data)
-        setActiveStageId((current) => current || (data.stages?.[0]?.id ?? null))
+        setActiveStageId((current) => {
+          if (current) return current
+          const stages = data.stages || []
+          if (stageParam && stages.some((s) => s.id === stageParam)) return stageParam
+          return stages[0]?.id ?? null
+        })
       },
       () => setNotFound(true)
     )
     return unsub
-  }, [id])
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (sectionParam !== 'documents') return
+    const el = document.getElementById('documents-panel')
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [sectionParam, project])
 
   useEffect(() => {
     if (!id) return
@@ -281,10 +309,17 @@ export default function ProjectDetailPage() {
             <RoadmapTimeline stages={stages} activeStageId={activeStage?.id} onSelectStage={(s) => setActiveStageId(s.id)} library={effectiveLibrary} />
 
             <div className="border-t border-line pt-6">
-              <ResourcesPanel resources={project.resources} onChange={updateResources} canManage={canManage} logAction={logAction} />
+              <ResourcesPanel
+                resources={project.resources}
+                onChange={updateResources}
+                canManage={canManage}
+                logAction={logAction}
+                autoOpen={sectionParam === 'resources'}
+                focusItemId={resourceItemParam}
+              />
             </div>
 
-            <div className="border-t border-line pt-6">
+            <div id="documents-panel" className="border-t border-line pt-6">
               <DocumentsPanel documents={project.documents} editable={canManage} onChange={updateDocuments} logAction={logAction} />
             </div>
 

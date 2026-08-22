@@ -6,13 +6,16 @@ import { ClipboardList, X } from 'lucide-react'
 import ResourcesTable from '@/components/ResourcesTable'
 import { normalizeSections } from '@/lib/resources'
 
-export default function ResourcesPanel({ resources, onChange, canManage, logAction }) {
+export default function ResourcesPanel({ resources, onChange, canManage, logAction, autoOpen = false, focusItemId = null }) {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const sections = useMemo(() => normalizeSections(resources), [resources])
   const totalItems = sections.reduce((n, s) => n + s.items.length, 0)
 
   useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    if (autoOpen) setOpen(true)
+  }, [autoOpen])
 
   useEffect(() => {
     if (!open) return
@@ -56,7 +59,7 @@ export default function ResourcesPanel({ resources, onChange, canManage, logActi
               </button>
             </div>
             <div className="px-6 py-5 overflow-auto flex-1">
-              <ResourcesTable sections={sections} onChange={onChange} canManage={canManage} logAction={logAction} />
+              <ResourcesTable sections={sections} onChange={onChange} canManage={canManage} logAction={logAction} focusItemId={focusItemId} />
             </div>
           </div>
         </div>,

@@ -228,3 +228,116 @@ body {
     display: none;
   }
 }
+
+/* --- Rex (AI assistant mascot) --- */
+
+.rex-icon {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+/* IDLE: gentle vertical float — the resting state, shown on the launcher
+   button and in the chat panel between turns. */
+@keyframes rex-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6%); }
+}
+.rex-icon-idle svg {
+  animation: rex-float 2.8s ease-in-out infinite;
+}
+
+/* Idle also gets an occasional blink — mostly still, a quick flick near
+   the end of a long cycle so it reads as "alive" without being fidgety.
+   Shared by both variants; transform-box: fill-box so the scale pivots
+   around the eye rect itself, not the SVG's own origin corner. */
+@keyframes rex-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.15); }
+}
+.rex-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: rex-blink 4.2s ease-in-out infinite;
+}
+
+/* SEARCHING: the whole body rocks side to side, like scanning the room —
+   distinct from idle's vertical float so it reads as active, not just
+   resting. In the detailed variant the held magnifying glass also sways
+   on its own, layered on top of this same body motion. */
+@keyframes rex-search-tilt {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+.rex-icon-searching svg {
+  animation: rex-search-tilt 850ms ease-in-out infinite;
+}
+.rex-icon-searching.rex-icon-compact svg { transform-origin: 50% 95%; }
+.rex-icon-searching.rex-icon-detailed svg { transform-origin: 30% 100%; }
+
+@keyframes rex-sway {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(8deg); }
+}
+.rex-prop-sway {
+  transform-origin: 16px 9.5px;
+  animation: rex-sway 900ms ease-in-out infinite;
+}
+
+/* WRITING: a quick, tight focused bob on the whole body — faster and
+   smaller than idle's float, reading as "heads-down working" rather than
+   "at rest". The detailed variant's pencil tip + scribble blink layer on
+   top of this same motion. */
+@keyframes rex-write-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6%); }
+}
+.rex-icon-writing svg {
+  animation: rex-write-bob 360ms ease-in-out infinite;
+}
+
+@keyframes rex-write {
+  0%, 100% { transform: translate(0, 0) rotate(-32deg); }
+  50% { transform: translate(-0.6px, 0.3px) rotate(-32deg); }
+}
+.rex-prop-write {
+  animation: rex-write 420ms ease-in-out infinite;
+}
+@keyframes rex-scribble-blink {
+  0%, 40% { opacity: 0; }
+  55%, 100% { opacity: 1; }
+}
+.rex-scribble {
+  animation: rex-scribble-blink 700ms steps(1) infinite;
+}
+.rex-scribble-delay {
+  animation-delay: 220ms;
+}
+
+/* FOUND IT: brief two-frame jaw-drop plus a small bounce, played once
+   when a result lands. transform-origin is percentage-based (not fixed
+   px) so it pivots around the head correctly at any rendered size, and
+   differs slightly per variant since the head sits at a different spot
+   in each silhouette. */
+@keyframes rex-found {
+  0%, 100% { transform: scaleY(1) translateY(0); }
+  35%, 65% { transform: scaleY(1.18) translateY(-4%); }
+}
+.rex-icon-found svg {
+  animation: rex-found 480ms steps(2, jump-none) 1;
+}
+.rex-icon-found.rex-icon-detailed svg { transform-origin: 72% 25%; }
+.rex-icon-found.rex-icon-compact svg { transform-origin: 75% 30%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rex-icon-idle svg,
+  .rex-icon-searching svg,
+  .rex-icon-writing svg,
+  .rex-icon-found svg,
+  .rex-eye,
+  .rex-prop-sway,
+  .rex-prop-write,
+  .rex-scribble {
+    animation: none;
+  }
+}

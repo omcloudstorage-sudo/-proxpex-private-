@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, Copy, Check, ExternalLink, ChevronDown, ChevronRight, Eye, EyeOff, KeyRound, ShieldCheck, Link2 } from 'lucide-react'
 import { newSection, newItem, ITEM_TYPES } from '@/lib/resources'
 import { AUDIT_ACTIONS } from '@/lib/auditLog'
@@ -19,7 +19,7 @@ const ADD_ITEM_OPTIONS = [
 // Value edits are logged on blur (not per keystroke) and never include the
 // actual field content — only which section changed — since these fields
 // can hold secrets and the log is readable by everyone on the project.
-export default function ResourcesTable({ sections, onChange, canManage = true, logAction }) {
+export default function ResourcesTable({ sections, onChange, canManage = true, logAction, focusItemId = null }) {
   const [collapsed, setCollapsed] = useState({})
 
   function addSection() {
@@ -76,6 +76,7 @@ export default function ResourcesTable({ sections, onChange, canManage = true, l
           onRemoveItem={(itemId) => removeItem(section.id, itemId)}
           onLogValueChanged={() => logValueChanged(section.name)}
           onLogSectionRenamed={logSectionRenamed}
+          focusItemId={focusItemId}
         />
       ))}
 
@@ -90,7 +91,7 @@ export default function ResourcesTable({ sections, onChange, canManage = true, l
 
 function SectionGroup({
   section, canManage, collapsed, onToggleCollapsed, onUpdateSection, onRemoveSection,
-  onAddItem, onUpdateItem, onRemoveItem, onLogValueChanged, onLogSectionRenamed,
+  onAddItem, onUpdateItem, onRemoveItem, onLogValueChanged, onLogSectionRenamed, focusItemId,
 }) {
   const nameFocusRef = useRef(section.name)
 
@@ -132,6 +133,7 @@ function SectionGroup({
               onUpdate={(patch) => onUpdateItem(item.id, patch)}
               onRemove={() => onRemoveItem(item.id)}
               onLogValueChanged={onLogValueChanged}
+              focused={item.id === focusItemId}
             />
           ))}
 
@@ -195,12 +197,21 @@ function useBlurLogger(onLogValueChanged) {
   }
 }
 
-function ItemCard({ item, canManage, onUpdate, onRemove, onLogValueChanged }) {
+function ItemCard({ item, canManage, onUpdate, onRemove, onLogValueChanged, focused = false }) {
   const [revealed, setRevealed] = useState(false)
   const blurLog = useBlurLogger(onLogValueChanged)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (focused && ref.current) ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [focused])
 
   return (
-    <div className="border border-line rounded-lg p-3 bg-paper/60">
+    <div
+      ref={ref}
+      id={`resource-item-${item.id}`}
+      className={`border rounded-lg p-3 bg-paper/60 transition-colors ${focused ? 'border-signal shadow-glow' : 'border-line'}`}
+    >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           {item.type === ITEM_TYPES.RESOURCE && (
