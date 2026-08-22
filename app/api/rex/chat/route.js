@@ -2,8 +2,6 @@ import { requireManager } from '@/lib/requireAdmin'
 import { callGemini } from '@/lib/gemini'
 import { REX_TOOL_DECLARATIONS, executeRexTool } from '@/lib/rexTools'
 
-export const runtime = 'nodejs'
-
 const MAX_MESSAGES = 25
 const MAX_TOOL_ROUNDS = 3
 
