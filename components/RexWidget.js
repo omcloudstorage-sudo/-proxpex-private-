@@ -9,15 +9,15 @@ import { useRexPreferences } from '@/contexts/RexPreferencesContext'
 
 const MAX_MESSAGES = 25
 
-// "Peek" sequence, triggered once per real route change (not free-roaming
-// — Rex lives permanently in the bottom-right corner). Three short phases
-// chained by plain timers: slide partway into view, run-in-place + a jump
-// while sliding the rest of the way in, then settle to idle. Kept quick —
-// under a second of actual motion — so it reads as a glance, not a show.
+// "Dance" sequence, triggered once per real route change. Rex never moves
+// position — he's permanently fixed in the bottom-right corner — this is
+// purely an icon-state sequence (run-in-place, jump, run-in-place, idle)
+// chained by plain timers. Kept quick, under a second, so it reads as a
+// glance, not a show.
 const RUN_MS = 300
 const JUMP_MS = 380
 const RUN_AFTER_MS = 270
-const PEEK_SLIDE_MS = RUN_MS + JUMP_MS + RUN_AFTER_MS
+const DANCE_MS = RUN_MS + JUMP_MS + RUN_AFTER_MS
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -90,9 +90,10 @@ function Message({ msg, onNavigate }) {
   )
 }
 
-// Live "Rex is working" row — his avatar plays the real searching/writing/
-// found motion here, in the flow of the conversation, then this row is
-// replaced by his actual reply once it lands.
+// Live "Rex is working" row — his avatar actually runs in place while
+// waiting on a reply (state 'running'), then plays writing/found, right
+// in the flow of the conversation; this row is replaced by his actual
+// reply once it lands.
 function RexWorking({ state }) {
   const label = state === 'writing' ? 'Writing a reply…' : 'Searching…'
   return (
@@ -117,20 +118,14 @@ export default function RexWidget() {
   const [busy, setBusy] = useState(false)
   const listRef = useRef(null)
 
-  // Peek sequence state: `motion` drives the icon (idle/running/jumping),
-  // `peeking` adds the slide-in-from-the-corner class. `peekKey` is bumped
-  // on every trigger and used as a React key on the sliding element so the
-  // CSS animation restarts cleanly even if the previous peek hadn't
-  // finished yet (a fresh key forces a remount instead of reusing a
-  // still-running animation).
+  // Dance sequence state: `motion` drives the icon (idle/running/jumping) —
+  // that's the only thing this sequence ever touches, no position changes.
   const [motion, setMotion] = useState('idle')
-  const [peeking, setPeeking] = useState(false)
-  const [peekKey, setPeekKey] = useState(0)
   const [reducedMotion, setReducedMotion] = useState(false)
   const timersRef = useRef([])
   const prevPathnameRef = useRef(pathname)
 
-  const peekEffective = roamEnabled && !reducedMotion
+  const danceEffective = roamEnabled && !reducedMotion
 
   function clearTimers() {
     timersRef.current.forEach(clearTimeout)
@@ -153,39 +148,33 @@ export default function RexWidget() {
     }
   }, [])
 
-  function playPeek() {
+  function playDance() {
     clearTimers()
-    setPeekKey((k) => k + 1)
-    setPeeking(true)
     setMotion('running')
     after(RUN_MS, () => setMotion('jumping'))
     after(RUN_MS + JUMP_MS, () => setMotion('running'))
-    after(PEEK_SLIDE_MS, () => {
-      setMotion('idle')
-      setPeeking(false)
-    })
+    after(DANCE_MS, () => setMotion('idle'))
   }
 
   // Fires once per actual route change — not on mount, not on every
-  // render. Skipped entirely while the chat is open or roaming is off.
+  // render. Skipped entirely while the chat is open or the setting is off.
   useEffect(() => {
     if (prevPathnameRef.current === pathname) return
     prevPathnameRef.current = pathname
-    if (!peekEffective || open) return
-    playPeek()
+    if (!danceEffective || open) return
+    playDance()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
-  // Toggling roaming off (Settings, or reduced-motion kicking in
-  // mid-session) cancels any peek in progress.
+  // Toggling the setting off (or reduced-motion kicking in mid-session)
+  // cancels any dance in progress.
   useEffect(() => {
-    if (!peekEffective) {
+    if (!danceEffective) {
       clearTimers()
       setMotion('idle')
-      setPeeking(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [peekEffective])
+  }, [danceEffective])
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
@@ -215,7 +204,7 @@ export default function RexWidget() {
 
     setInput('')
     setBusy(true)
-    setRexState('searching')
+    setRexState('running')
     const history = messages.map((m) => ({ role: m.role, text: m.text }))
     setMessages((m) => [...m, { role: 'user', text }])
 
@@ -237,25 +226,19 @@ export default function RexWidget() {
 
   return (
     <>
-      {/* Fixed in the corner, permanently — no free-roaming. The outer box
-          is pointer-events: none and fully transparent (no card/background
-          behind Rex); only the tight inner button, matching the sprite
-          itself, is clickable. */}
+      {/* Fixed in the corner, permanently — no movement, ever. The outer
+          box is pointer-events: none and fully transparent (no
+          card/background behind Rex); only the tight inner button,
+          matching the sprite itself, is clickable. */}
       <div className="fixed bottom-6 right-6 z-40 w-11 h-11 pointer-events-none overflow-visible">
-        <div
-          key={peekKey}
-          className={peeking ? 'rex-peek' : ''}
-          style={peeking ? { animationDuration: `${PEEK_SLIDE_MS}ms` } : undefined}
+        <button
+          data-rex-launcher
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Open Rex, your Proxpex assistant"
+          className="pointer-events-auto w-11 h-11 flex items-center justify-center"
         >
-          <button
-            data-rex-launcher
-            onClick={() => setOpen((o) => !o)}
-            aria-label="Open Rex, your Proxpex assistant"
-            className="pointer-events-auto w-11 h-11 flex items-center justify-center"
-          >
-            <RexIcon variant="compact" state={open ? 'idle' : busy ? rexState : motion} still={!peekEffective} />
-          </button>
-        </div>
+          <RexIcon variant="compact" state={open ? 'idle' : busy ? rexState : motion} still={!danceEffective} />
+        </button>
       </div>
 
       {open && (
