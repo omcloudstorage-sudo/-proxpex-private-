@@ -17,20 +17,25 @@ function initials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('')
 }
 
-export default function AuditLogPanel({ entries }) {
+// `bare` drops the outer card/header chrome when a parent (e.g.
+// CollapsibleSection on the project page) already supplies it.
+export default function AuditLogPanel({ entries, bare = false }) {
   const [openEntry, setOpenEntry] = useState(null)
 
   return (
-    <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card overflow-hidden">
-      <div className="bg-paper/50 border-b border-line px-6 py-6">
-        <div className="flex items-center gap-2">
-          <History className="w-[18px] h-[18px] text-ink" strokeWidth={1.75} />
-          <span className="text-xl font-display font-semibold text-ink uppercase tracking-wide">Audit log</span>
+    <div className={bare ? '' : 'bg-surface/90 backdrop-blur border border-line rounded-card shadow-card overflow-hidden'}>
+      {!bare && (
+        <div className="bg-paper/50 border-b border-line px-6 py-6">
+          <div className="flex items-center gap-2">
+            <History className="w-[18px] h-[18px] text-ink" strokeWidth={1.75} />
+            <span className="text-xl font-display font-semibold text-ink uppercase tracking-wide">Audit log</span>
+          </div>
+          <p className="text-sm text-slate mt-1 pl-[26px]">A permanent, append-only history of everything that happened on this project.</p>
         </div>
-        <p className="text-sm text-slate mt-1 pl-[26px]">A permanent, append-only history of everything that happened on this project.</p>
-      </div>
+      )}
+      {bare && <p className="text-sm text-slate mb-3">A permanent, append-only history of everything that happened on this project.</p>}
 
-      <div className="max-h-[420px] overflow-y-auto">
+      <div className={bare ? 'max-h-[420px] overflow-y-auto border border-line rounded-lg' : 'max-h-[420px] overflow-y-auto'}>
         {(!entries || entries.length === 0) && (
           <p className="text-sm text-slate-light italic px-6 py-6">No activity yet — actions on this project will appear here.</p>
         )}

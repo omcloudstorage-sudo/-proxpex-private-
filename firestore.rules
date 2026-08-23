@@ -50,6 +50,15 @@ service cloud.firestore {
         allow write: if signedIn() && me().companyId == companyId && (me().role == 'admin' || me().role == 'pm');
       }
 
+      // --- Kanban column library (subcollection) ---
+      // Same pattern as statusLibrary/priorityLibrary — company-wide Sprint
+      // Board columns, shared by every project. Everyone can read (a board
+      // needs to render for Client/team member too), only Admin/PM can write.
+      match /kanbanColumnLibrary/{columnId} {
+        allow read: if signedIn() && me().companyId == companyId;
+        allow write: if signedIn() && me().companyId == companyId && (me().role == 'admin' || me().role == 'pm');
+      }
+
       // --- Roadmap templates (subcollection) ---
       // Stage list + status set, independent from Requirement Sheet
       // templates so a project can pick either separately.

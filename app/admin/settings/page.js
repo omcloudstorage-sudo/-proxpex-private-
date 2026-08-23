@@ -5,10 +5,12 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAdminData } from '@/contexts/AdminDataContext'
 import { useStatusLibrary } from '@/lib/useStatusLibrary'
 import { usePriorityLibrary } from '@/lib/usePriorityLibrary'
+import { useKanbanColumns } from '@/lib/useKanbanColumns'
 import { useRoadmapTemplates, useResourceTemplates } from '@/lib/useTemplates'
 import { useFeatureVisibility } from '@/lib/useFeatureVisibility'
 import StatusLibraryPanel from '@/components/StatusLibraryPanel'
 import PriorityLibraryPanel from '@/components/PriorityLibraryPanel'
+import KanbanColumnsPanel from '@/components/KanbanColumnsPanel'
 import RoadmapTemplatesPanel from '@/components/RoadmapTemplatesPanel'
 import ResourceTemplatesPanel from '@/components/ResourceTemplatesPanel'
 import FeatureVisibilityPanel from '@/components/FeatureVisibilityPanel'
@@ -20,6 +22,7 @@ export default function AdminSettingsPage() {
   const { companyName, projects, pms, clients } = useAdminData()
   const { library } = useStatusLibrary(profile?.companyId, true)
   const { library: priorityLibrary } = usePriorityLibrary(profile?.companyId, true)
+  const { columns: kanbanColumns } = useKanbanColumns(profile?.companyId, true)
   const { templates: roadmapTemplates } = useRoadmapTemplates(profile?.companyId)
   const { templates: resourceTemplates } = useResourceTemplates(profile?.companyId)
   const { library: featureLibrary } = useFeatureVisibility(profile?.companyId, true)
@@ -63,6 +66,7 @@ export default function AdminSettingsPage() {
             <StatusLibraryPanel companyId={profile.companyId} library={library} />
             <PriorityLibraryPanel companyId={profile.companyId} library={priorityLibrary} />
           </div>
+          <KanbanColumnsPanel companyId={profile.companyId} library={kanbanColumns} />
           <div className="grid md:grid-cols-2 gap-6 items-start">
             <RoadmapTemplatesPanel companyId={profile.companyId} templates={roadmapTemplates} library={library} />
             <ResourceTemplatesPanel companyId={profile.companyId} templates={resourceTemplates} />

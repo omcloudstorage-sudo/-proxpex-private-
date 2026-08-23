@@ -6,11 +6,12 @@ import {
   doc, onSnapshot, updateDoc, collection, query, where, orderBy, limit,
   addDoc, deleteDoc, getDocs, serverTimestamp,
 } from 'firebase/firestore'
+import { ClipboardList, FileText, MessageSquare, History } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import TopNav from '@/components/TopNav'
 import RoadmapTimeline from '@/components/RoadmapTimeline'
-import StagePanel from '@/components/StagePanel'
+import StagePanel, { MomPanel } from '@/components/StagePanel'
 import KanbanBoard from '@/components/KanbanBoard'
 import TaskDetailModal from '@/components/TaskDetailModal'
 import TeamUpdatesPanel from '@/components/TeamUpdatesPanel'
@@ -18,6 +19,7 @@ import AuditLogPanel from '@/components/AuditLogPanel'
 import DocumentsPanel from '@/components/DocumentsPanel'
 import ResourcesPanel from '@/components/ResourcesPanel'
 import ProgressBar from '@/components/ProgressBar'
+import CollapsibleSection from '@/components/CollapsibleSection'
 import { newStage } from '@/lib/stages'
 import { newTeamUpdate, migrateStageUpdatesToProjectFeed } from '@/lib/teamUpdates'
 import { newTaskDraft, isSubtask } from '@/lib/tasks'
@@ -27,6 +29,7 @@ import { AUDIT_ACTIONS, logAction as writeAuditLog } from '@/lib/auditLog'
 import { useStatusLibrary } from '@/lib/useStatusLibrary'
 import { usePriorityLibrary } from '@/lib/usePriorityLibrary'
 import { DEFAULT_PRIORITY_ID } from '@/lib/priorityLibrary'
+import { useKanbanColumns } from '@/lib/useKanbanColumns'
 import { useFeatureVisibility } from '@/lib/useFeatureVisibility'
 import { isFeatureVisible } from '@/lib/featureVisibility'
 import { useProjectTeam } from '@/lib/useProjectTeam'
@@ -147,6 +150,7 @@ function ProjectDetailPageInner() {
 
   const { library } = useStatusLibrary(project?.companyId, access.canManage)
   const { library: priorityLibrary } = usePriorityLibrary(project?.companyId, access.canManage)
+  const { columns: kanbanColumns } = useKanbanColumns(project?.companyId, access.canManage)
   const { library: featureLibrary } = useFeatureVisibility(project?.companyId, access.canManage)
   const { assignees } = useProjectTeam(project?.pmId)
 
@@ -309,10 +313,10 @@ function ProjectDetailPageInner() {
   }
 
   // --- Tasks / subtasks (Sprint board) ---
-  async function createTask(stageId, parentTaskId = null) {
+  async function createTask(stageId, parentTaskId = null, status = null) {
     const parentTitle = parentTaskId ? tasks.find((t) => t.id === parentTaskId)?.title : null
     const ref = await addDoc(collection(db, 'projects', id, 'tasks'), {
-      ...newTaskDraft({ priorityId: DEFAULT_PRIORITY_ID, stageId, parentTaskId }),
+      ...newTaskDraft({ priorityId: DEFAULT_PRIORITY_ID, stageId, parentTaskId, status }),
       createdBy: currentUser.uid,
       createdByName: currentUser.name,
       createdAt: serverTimestamp(),
@@ -437,8 +441,34 @@ function ProjectDetailPageInner() {
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 items-start mb-6">
-          <aside className="w-full lg:w-72 flex-shrink-0 bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 flex flex-col gap-8 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] overflow-y-auto">
+        <div className="flex flex-col gap-6 mb-6">
+          <StagePanel
+            stage={activeStage}
+            canManage={canManage}
+            currentUser={currentUser}
+            onChange={handleStageChange}
+            logAction={logAction}
+            statusOptions={statusOptions}
+            onAddStatus={addStatus}
+            maxStatuses={MAX_PROJECT_STATUSES}
+          />
+
+          {sprintPlannerVisible && activeStage && (
+            <KanbanBoard
+              tasks={activeStageTasks}
+              subtasksByParent={subtasksByParent}
+              priorityLibrary={priorityLibrary}
+              assignees={assignees}
+              columns={kanbanColumns}
+              companyId={project.companyId}
+              canManage={canManageTasks}
+              onOpenTask={(t) => setOpenTaskId(t.id)}
+              onCreateTask={async (columnId) => setOpenTaskId(await createTask(activeStage.id, null, columnId))}
+              onMoveTask={moveTask}
+            />
+          )}
+
+          <CollapsibleSection icon={ClipboardList} title="Requirements & Credentials" defaultOpen={false}>
             <ResourcesPanel
               resources={project.resources}
               onChange={updateResources}
@@ -447,56 +477,45 @@ function ProjectDetailPageInner() {
               autoOpen={sectionParam === 'resources'}
               focusItemId={resourceItemParam}
             />
+          </CollapsibleSection>
 
-            <div id="documents-panel" className="border-t border-line pt-6">
+          <div id="documents-panel">
+            <CollapsibleSection icon={FileText} title="Documents" defaultOpen={sectionParam === 'documents'}>
               <DocumentsPanel documents={project.documents} editable={canManage} onChange={updateDocuments} logAction={logAction} />
-            </div>
-          </aside>
-
-          <div className="flex-1 min-w-0 flex flex-col gap-6">
-            <StagePanel
-              stage={activeStage}
-              canManage={canManage}
-              currentUser={currentUser}
-              onChange={handleStageChange}
-              logAction={logAction}
-              statusOptions={statusOptions}
-              onAddStatus={addStatus}
-              maxStatuses={MAX_PROJECT_STATUSES}
-              momEntries={activeMomEntries}
-              onCreateMom={(draft) => createMom(activeStage.id, draft)}
-              onUpdateMom={updateMom}
-              onDeleteMom={deleteMom}
-              onApproveMom={approveMom}
-            />
-
-            {sprintPlannerVisible && activeStage && (
-              <KanbanBoard
-                tasks={activeStageTasks}
-                subtasksByParent={subtasksByParent}
-                priorityLibrary={priorityLibrary}
-                assignees={assignees}
-                canManage={canManageTasks}
-                onOpenTask={(t) => setOpenTaskId(t.id)}
-                onCreateTask={async () => setOpenTaskId(await createTask(activeStage.id))}
-                onMoveTask={moveTask}
-              />
-            )}
+            </CollapsibleSection>
           </div>
-        </div>
 
-        <TeamUpdatesPanel
-          updates={teamUpdates}
-          canPost={canPostUpdate}
-          currentUser={currentUser}
-          onPost={postTeamUpdate}
-          onEdit={editTeamUpdate}
-          onDelete={deleteTeamUpdate}
-          stages={stages}
-        />
+          <CollapsibleSection icon={ClipboardList} title="MOM" defaultOpen={false}>
+            <div className="h-[400px] flex flex-col">
+              <MomPanel
+                entries={activeMomEntries}
+                canManage={canManage}
+                currentUser={currentUser}
+                onCreate={(draft) => createMom(activeStage.id, draft)}
+                onUpdate={updateMom}
+                onDelete={deleteMom}
+                onApprove={approveMom}
+                onSubmit={(momId) => updateMom(momId, { status: MOM_STATUS.PENDING })}
+              />
+            </div>
+          </CollapsibleSection>
 
-        <div className="mt-6">
-          <AuditLogPanel entries={auditLog} />
+          <CollapsibleSection icon={MessageSquare} title="Team Updates" defaultOpen={false}>
+            <TeamUpdatesPanel
+              updates={teamUpdates}
+              canPost={canPostUpdate}
+              currentUser={currentUser}
+              onPost={postTeamUpdate}
+              onEdit={editTeamUpdate}
+              onDelete={deleteTeamUpdate}
+              stages={stages}
+              bare
+            />
+          </CollapsibleSection>
+
+          <CollapsibleSection icon={History} title="Audit Log" defaultOpen={false}>
+            <AuditLogPanel entries={auditLog} bare />
+          </CollapsibleSection>
         </div>
       </main>
 
@@ -507,6 +526,7 @@ function ProjectDetailPageInner() {
           allTasks={tasks}
           priorityLibrary={priorityLibrary}
           assignees={assignees}
+          columns={kanbanColumns}
           currentUser={currentUser}
           canManage={canManageTasks}
           onClose={() => setOpenTaskId(null)}

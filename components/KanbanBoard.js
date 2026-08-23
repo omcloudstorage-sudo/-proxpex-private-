@@ -1,20 +1,28 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, LayoutGrid } from 'lucide-react'
+import { doc, setDoc, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { Plus, LayoutGrid, Pencil, Check, X } from 'lucide-react'
 import TaskCard from '@/components/TaskCard'
 import ProgressBar from '@/components/ProgressBar'
-import { TASK_STATUS_COLUMNS, subtaskProgress } from '@/lib/tasks'
+import { subtaskProgress } from '@/lib/tasks'
+import { newColumn, TODO_COLUMN_ID, DONE_COLUMN_ID } from '@/lib/kanbanColumns'
 
 // Renders one stage's board. `tasks` are already filtered to this stage's
 // top-level tasks (parentTaskId == null) by the caller; subtasks never
 // appear here as their own cards — subtaskCountByParent supplies each
-// parent card's "X of Y subtasks done" secondary indicator.
+// parent card's "X of Y subtasks done" secondary indicator. `columns` is the
+// company's Kanban column library (fixed To Do first, fixed Done last,
+// custom columns in between — see lib/kanbanColumns.js), passed in already
+// ordered by the caller via useKanbanColumns.
 export default function KanbanBoard({
   tasks,
   subtasksByParent,
   priorityLibrary,
   assignees,
+  columns,
+  companyId,
   canManage,
   onOpenTask,
   onCreateTask,
@@ -22,7 +30,7 @@ export default function KanbanBoard({
 }) {
   const [dragTaskId, setDragTaskId] = useState(null)
 
-  const done = tasks.filter((t) => t.status === 'done').length
+  const done = tasks.filter((t) => t.status === DONE_COLUMN_ID).length
   const total = tasks.length
   const pct = total ? Math.round((done / total) * 100) : 0
 
@@ -37,6 +45,18 @@ export default function KanbanBoard({
     setDragTaskId(null)
   }
 
+  async function addColumn(name) {
+    if (!name?.trim()) return
+    const maxOrder = columns.filter((c) => !c.fixed).reduce((m, c) => Math.max(m, c.order ?? 0), 0)
+    const entry = newColumn(maxOrder + 1)
+    await setDoc(doc(db, 'companies', companyId, 'kanbanColumnLibrary', entry.id), { name: name.trim(), order: entry.order, fixed: false })
+  }
+
+  async function renameColumn(columnId, name) {
+    if (!name?.trim()) return
+    await updateDoc(doc(db, 'companies', companyId, 'kanbanColumnLibrary', columnId), { name: name.trim() })
+  }
+
   return (
     <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
@@ -44,14 +64,6 @@ export default function KanbanBoard({
           <LayoutGrid className="w-[18px] h-[18px] text-ink" strokeWidth={1.75} />
           <span className="font-display text-xl font-semibold text-ink uppercase tracking-wide">Sprint board</span>
         </div>
-        {canManage && (
-          <button
-            onClick={() => onCreateTask(TASK_STATUS_COLUMNS[0].id)}
-            className="text-ink hover:text-signal flex items-center gap-1 text-sm font-semibold"
-          >
-            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> New task
-          </button>
-        )}
       </div>
 
       {total > 0 && (
@@ -64,21 +76,23 @@ export default function KanbanBoard({
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {TASK_STATUS_COLUMNS.map((col) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+        {columns.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.id)
           return (
             <div
               key={col.id}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => handleDrop(e, col.id)}
-              className="bg-paper/60 border border-line rounded-lg p-3 min-h-[120px]"
+              className="bg-paper/60 border border-line rounded-lg p-4 flex flex-col"
             >
-              <div className="flex items-center justify-between mb-3 px-0.5">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate">{col.name}</span>
-                <span className="text-xs text-slate-light">{colTasks.length}</span>
-              </div>
-              <div className="space-y-2.5">
+              <ColumnHeader
+                column={col}
+                count={colTasks.length}
+                canManage={canManage}
+                onRename={(name) => renameColumn(col.id, name)}
+              />
+              <div className="space-y-3 overflow-y-auto max-h-[480px] pr-0.5 flex-1 min-h-[80px]">
                 {colTasks.map((task) => (
                   <TaskCard
                     key={task.id}
@@ -95,9 +109,98 @@ export default function KanbanBoard({
                   <p className="text-xs text-slate-light italic px-1 py-1">No tasks.</p>
                 )}
               </div>
+              {canManage && (
+                <button
+                  onClick={() => onCreateTask(col.id)}
+                  className="mt-3 flex-shrink-0 text-ink hover:text-signal flex items-center gap-1 text-xs font-semibold"
+                >
+                  <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add task
+                </button>
+              )}
             </div>
           )
         })}
+
+        {canManage && <AddColumnControl onAdd={addColumn} />}
+      </div>
+    </div>
+  )
+}
+
+function ColumnHeader({ column, count, canManage, onRename }) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(column.name)
+
+  function save() {
+    onRename(name)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5 mb-3 px-0.5">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          className="flex-1 min-w-0 text-xs font-semibold uppercase tracking-wide text-ink bg-surface border border-line rounded px-1.5 py-0.5 outline-none focus:border-signal"
+        />
+        <button onClick={save} className="text-progress flex-shrink-0"><Check className="w-3.5 h-3.5" strokeWidth={2} /></button>
+        <button onClick={() => { setName(column.name); setEditing(false) }} className="text-slate-light flex-shrink-0"><X className="w-3.5 h-3.5" strokeWidth={2} /></button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-between mb-3 px-0.5 flex-shrink-0 group">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate truncate">{column.name}</span>
+        {canManage && !column.fixed && (
+          <button onClick={() => setEditing(true)} className="text-slate-light hover:text-ink opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <Pencil className="w-3 h-3" strokeWidth={1.75} />
+          </button>
+        )}
+      </div>
+      <span className="text-xs text-slate-light flex-shrink-0">{count}</span>
+    </div>
+  )
+}
+
+function AddColumnControl({ onAdd }) {
+  const [adding, setAdding] = useState(false)
+  const [name, setName] = useState('')
+
+  function save() {
+    onAdd(name)
+    setName('')
+    setAdding(false)
+  }
+
+  if (!adding) {
+    return (
+      <button
+        onClick={() => setAdding(true)}
+        className="border border-dashed border-line rounded-lg p-4 flex items-center justify-center gap-1.5 text-sm font-semibold text-slate hover:text-ink hover:border-ink/30 transition-colors min-h-[120px]"
+      >
+        <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add column
+      </button>
+    )
+  }
+
+  return (
+    <div className="border border-signal/40 rounded-lg p-4 bg-signal-light/30 space-y-2">
+      <input
+        autoFocus
+        placeholder="Column name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && save()}
+        className="w-full border border-line rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-signal bg-surface"
+      />
+      <div className="flex justify-end gap-2">
+        <button onClick={() => { setName(''); setAdding(false) }} className="text-xs font-medium px-2 py-1 rounded-lg text-slate hover:text-ink flex items-center gap-1"><X className="w-3.5 h-3.5" /></button>
+        <button onClick={save} className="text-xs font-medium px-2.5 py-1 rounded-lg bg-signal text-white hover:bg-signal-dark flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Add</button>
       </div>
     </div>
   )

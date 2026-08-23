@@ -23,11 +23,6 @@ export default function StagePanel({
   statusOptions,
   onAddStatus,
   maxStatuses,
-  momEntries,
-  onCreateMom,
-  onUpdateMom,
-  onDeleteMom,
-  onApproveMom,
 }) {
   const [local, setLocal] = useState(stage ? normalizeStage(stage) : null)
 
@@ -135,19 +130,6 @@ export default function StagePanel({
         </div>
       </div>
 
-      <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 h-[400px] flex flex-col">
-        <MomPanel
-          entries={momEntries}
-          canManage={canManage}
-          currentUser={currentUser}
-          onCreate={onCreateMom}
-          onUpdate={onUpdateMom}
-          onDelete={onDeleteMom}
-          onApprove={onApproveMom}
-          onSubmit={(id) => onUpdateMom?.(id, { status: MOM_STATUS.PENDING })}
-        />
-      </div>
-
       {INVOICES_UI_ENABLED && (
         <InvoicesPanel
           invoices={local.invoices}
@@ -161,7 +143,9 @@ export default function StagePanel({
   )
 }
 
-function MomPanel({ entries, canManage, currentUser, onCreate, onUpdate, onDelete, onApprove, onSubmit }) {
+// Rendered by the project page as its own collapsible section (not inside
+// the stage header card) — see app/project/[id]/page.js.
+export function MomPanel({ entries, canManage, currentUser, onCreate, onUpdate, onDelete, onApprove, onSubmit }) {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState(null)

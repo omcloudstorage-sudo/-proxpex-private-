@@ -8,7 +8,9 @@ import EntryModal from '@/components/EntryModal'
 // lib/teamUpdates.js). Each entry optionally carries stageName so entries
 // created before the restructure (or posted while a stage is active) stay
 // traceable to the stage they relate to.
-export default function TeamUpdatesPanel({ updates, canPost, currentUser, onPost, onEdit, onDelete, stages }) {
+// `bare` drops the outer card/header chrome when a parent (e.g.
+// CollapsibleSection on the project page) already supplies it.
+export default function TeamUpdatesPanel({ updates, canPost, currentUser, onPost, onEdit, onDelete, stages, bare = false }) {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState(null)
@@ -43,23 +45,27 @@ export default function TeamUpdatesPanel({ updates, canPost, currentUser, onPost
   }
 
   return (
-    <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6">
+    <div className={bare ? '' : 'bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6'}>
       <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-ink" strokeWidth={1.75} />
-          <span className="font-display text-xl font-semibold text-ink uppercase tracking-wide">Team Updates</span>
-        </div>
+        {bare ? (
+          <p className="text-sm text-slate">Project-wide notes — anyone on the team can post.</p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-ink" strokeWidth={1.75} />
+            <span className="font-display text-xl font-semibold text-ink uppercase tracking-wide">Team Updates</span>
+          </div>
+        )}
         {canPost && !adding && (
-          <button onClick={startAdd} className="text-ink hover:text-signal flex items-center gap-1 text-sm font-semibold">
+          <button onClick={startAdd} className="text-ink hover:text-signal flex items-center gap-1 text-sm font-semibold flex-shrink-0">
             <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Post
           </button>
         )}
       </div>
-      <p className="text-sm text-slate mb-4">Project-wide notes — anyone on the team can post.</p>
+      {!bare && <p className="text-sm text-slate mb-4">Project-wide notes — anyone on the team can post.</p>}
 
-      {adding && <div className="mb-2.5"><UpdateForm draft={draft} setDraft={setDraft} onSave={saveDraft} onCancel={cancelDraft} stages={stages} /></div>}
+      {adding && <div className="mb-2.5 mt-3"><UpdateForm draft={draft} setDraft={setDraft} onSave={saveDraft} onCancel={cancelDraft} stages={stages} /></div>}
 
-      <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+      <div className={`space-y-2.5 max-h-[420px] overflow-y-auto pr-1 ${bare ? 'mt-3' : ''}`}>
         {sorted.length === 0 && !adding && (
           <p className="text-sm text-slate-light italic">No updates yet{canPost ? ' — be the first to post one.' : '.'}</p>
         )}
