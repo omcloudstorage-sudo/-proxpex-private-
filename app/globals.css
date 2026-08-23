@@ -370,6 +370,27 @@ body {
 .rex-icon-jumping.rex-icon-compact svg { transform-origin: 50% 100%; }
 .rex-icon-jumping.rex-icon-detailed svg { transform-origin: 30% 100%; }
 
+/* PEEK: plays once per real route change, on the outer positioning box
+   (not the SVG) — Rex slides partway in from the corner, then the rest
+   of the way in while the run/jump/run icon sequence above plays,
+   landing back at rest. Duration is passed inline from RexWidget so it
+   always matches the JS timer chain exactly; the value here is just a
+   fallback. animation-fill-mode: both holds the start position for the
+   first frame and the end position after it finishes, so there's no
+   flash back to an untransformed state on either edge. */
+@keyframes rex-peek-slide {
+  0% { transform: translate(55%, 55%); }
+  25% { transform: translate(18%, 18%); }
+  100% { transform: translate(0, 0); }
+}
+.rex-peek {
+  animation-name: rex-peek-slide;
+  animation-duration: 950ms;
+  animation-timing-function: cubic-bezier(0.22, 0.9, 0.3, 1);
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
 /* Forced fully-static fallback (Settings toggle off) — every Rex
    animation off regardless of state. Separate from the reduced-motion
    query below since it's opt-in per user preference, not OS-level. */
@@ -395,7 +416,8 @@ body {
   .rex-prop-write,
   .rex-scribble,
   .rex-legs-a,
-  .rex-legs-b {
+  .rex-legs-b,
+  .rex-peek {
     animation: none;
   }
 }

@@ -9,15 +9,15 @@ import { useRexPreferences } from '@/contexts/RexPreferencesContext'
 
 const MAX_MESSAGES = 25
 
-// Launcher box — small and tight to the actual sprite (see the render
-// below: this is the *only* clickable area, everything else has
-// pointer-events: none so Rex never blocks a click, even mid-roam).
-const SIZE = 44
-const MARGIN = 24
+// "Peek" sequence, triggered once per real route change (not free-roaming
+// — Rex lives permanently in the bottom-right corner). Three short phases
+// chained by plain timers: slide partway into view, run-in-place + a jump
+// while sliding the rest of the way in, then settle to idle. Kept quick —
+// under a second of actual motion — so it reads as a glance, not a show.
+const RUN_MS = 300
 const JUMP_MS = 380
-const IDLE_MIN_MS = 5000
-const IDLE_MAX_MS = 20000
-const MIN_TRIP_PX = 120
+const RUN_AFTER_MS = 270
+const PEEK_SLIDE_MS = RUN_MS + JUMP_MS + RUN_AFTER_MS
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -117,22 +117,20 @@ export default function RexWidget() {
   const [busy, setBusy] = useState(false)
   const listRef = useRef(null)
 
-  // Roaming: position is tracked separately from the chat-turn `rexState`
-  // above (searching/writing/found) — `motion` only ever holds
-  // idle/running/jumping, and only drives the floating launcher, never the
-  // in-chat avatar.
-  const [pos, setPos] = useState(null)
+  // Peek sequence state: `motion` drives the icon (idle/running/jumping),
+  // `peeking` adds the slide-in-from-the-corner class. `peekKey` is bumped
+  // on every trigger and used as a React key on the sliding element so the
+  // CSS animation restarts cleanly even if the previous peek hadn't
+  // finished yet (a fresh key forces a remount instead of reusing a
+  // still-running animation).
   const [motion, setMotion] = useState('idle')
+  const [peeking, setPeeking] = useState(false)
+  const [peekKey, setPeekKey] = useState(0)
   const [reducedMotion, setReducedMotion] = useState(false)
-  const posRef = useRef(null)
-  const restingRef = useRef(true)
   const timersRef = useRef([])
+  const prevPathnameRef = useRef(pathname)
 
-  const roamEffective = roamEnabled && !reducedMotion
-
-  useEffect(() => {
-    posRef.current = pos
-  }, [pos])
+  const peekEffective = roamEnabled && !reducedMotion
 
   function clearTimers() {
     timersRef.current.forEach(clearTimeout)
@@ -141,156 +139,53 @@ export default function RexWidget() {
   function after(ms, fn) {
     timersRef.current.push(setTimeout(fn, ms))
   }
-  function restPos() {
-    return { left: window.innerWidth - MARGIN - SIZE, top: window.innerHeight - MARGIN - SIZE, duration: 0 }
-  }
-  function tripDuration(from, to) {
-    const dist = Math.hypot(to.left - from.left, to.top - from.top)
-    return Math.round(Math.min(900, Math.max(420, dist * 1.15)))
-  }
 
-  // Mount: place Rex at rest, and track the OS-level reduced-motion
-  // preference live (it can change without a reload).
+  // Track the OS-level reduced-motion preference live (it can change
+  // without a reload).
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
     setReducedMotion(mq.matches)
     const onMq = (e) => setReducedMotion(e.matches)
     mq.addEventListener('change', onMq)
-
-    setPos(restPos())
-
-    function onResize() {
-      if (restingRef.current) setPos(restPos())
-    }
-    window.addEventListener('resize', onResize)
-
     return () => {
       mq.removeEventListener('change', onMq)
-      window.removeEventListener('resize', onResize)
       clearTimers()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function goRestNow() {
+  function playPeek() {
     clearTimers()
-    restingRef.current = true
-    setMotion('idle')
-    setPos(restPos())
-  }
-
-  function randRange(min, max) {
-    return min + Math.random() * (max - min)
-  }
-
-  // Best-effort "is this point over something I shouldn't land on" check —
-  // a single elementFromPoint hit-test, not a layout scan, so it stays
-  // cheap even though it's the thing gating every move. Rejects anything
-  // interactive (button/link/input/etc.) and any leaf element that itself
-  // carries visible text (a heading, a label, a card title) — but not a
-  // plain container div, which is what most card padding/gutters are.
-  // Generalizes to any page layout since it only looks at what's actually
-  // rendered at that pixel, never at a specific component tree shape.
-  function pointBlocked(x, y) {
-    const el = document.elementFromPoint(x, y)
-    if (!el || el.closest('[data-rex-launcher]')) return false
-    if (el.closest('button, a, [role="button"], input, textarea, select, label, [contenteditable="true"]')) return true
-    if (el.children.length === 0 && (el.textContent || '').trim().length > 0) return true
-    return false
-  }
-
-  // Picks a random point anywhere in the viewport that isn't sitting on
-  // content, biased toward "just try somewhere else" rather than any
-  // specific safe zone — a handful of cheap hit-tests per attempt, so
-  // even a full 10-try miss is negligible work. Returns null if nothing
-  // panned out this round (caller just retries soon after).
-  function pickDestination() {
-    const maxLeft = window.innerWidth - MARGIN - SIZE
-    const maxTop = window.innerHeight - MARGIN - SIZE
-    if (maxLeft <= MARGIN || maxTop <= MARGIN) return null
-    const from = posRef.current || restPos()
-
-    for (let i = 0; i < 10; i++) {
-      const left = randRange(MARGIN, maxLeft)
-      const top = randRange(MARGIN, maxTop)
-      if (Math.hypot(left - from.left, top - from.top) < MIN_TRIP_PX) continue
-      if (pointBlocked(left + SIZE / 2, top + SIZE / 2)) continue
-      return { left, top }
-    }
-    return null
-  }
-
-  function scheduleNextMove(delay) {
-    after(delay ?? randRange(IDLE_MIN_MS, IDLE_MAX_MS), doMove)
-  }
-
-  // The whole ambient loop: pick somewhere new, run there (sometimes with
-  // a hop partway through), sometimes hop again on arrival, then go idle
-  // for a random stretch before picking the next spot. Timer-driven, not
-  // a rAF loop — CSS handles the actual motion between waypoints.
-  function doMove() {
-    if (!roamEffective || open) return
-    const target = pickDestination()
-    if (!target) {
-      scheduleNextMove(randRange(1500, 3000)) // no safe spot this round — try again soon
-      return
-    }
-
-    restingRef.current = false
-    const from = posRef.current || restPos()
-    const duration = tripDuration(from, target)
-    const jumpMode = Math.random() < 0.55 ? (Math.random() < 0.5 ? 'mid' : 'arrival') : 'none'
-
+    setPeekKey((k) => k + 1)
+    setPeeking(true)
     setMotion('running')
-    setPos({ ...target, duration })
-
-    if (jumpMode === 'mid') {
-      after(Math.round(duration * randRange(0.35, 0.65)), () => {
-        setMotion('jumping')
-        after(JUMP_MS, () => setMotion('running'))
-      })
-    }
-
-    after(duration, () => {
-      function settle() {
-        setMotion('idle')
-        restingRef.current = true
-        scheduleNextMove()
-      }
-      if (jumpMode === 'arrival') {
-        setMotion('jumping')
-        after(JUMP_MS, settle)
-      } else {
-        settle()
-      }
+    after(RUN_MS, () => setMotion('jumping'))
+    after(RUN_MS + JUMP_MS, () => setMotion('running'))
+    after(PEEK_SLIDE_MS, () => {
+      setMotion('idle')
+      setPeeking(false)
     })
   }
 
-  // The self-sustaining loop: (re)started whenever roaming turns on/off
-  // or the chat opens/closes, torn down otherwise. Each doMove() call
-  // schedules its own successor via setTimeout, so once started this
-  // keeps going indefinitely without this effect re-running.
+  // Fires once per actual route change — not on mount, not on every
+  // render. Skipped entirely while the chat is open or roaming is off.
   useEffect(() => {
-    if (!roamEffective) {
-      goRestNow()
-      return
-    }
-    if (open) {
-      clearTimers()
-      return
-    }
-    scheduleNextMove()
-    return () => clearTimers()
+    if (prevPathnameRef.current === pathname) return
+    prevPathnameRef.current = pathname
+    if (!peekEffective || open) return
+    playPeek()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roamEffective, open])
+  }, [pathname])
 
-  // Opening the chat snaps Rex home instantly — the panel itself is
-  // anchored bottom-right, so this keeps it opening next to him rather
-  // than wherever he happened to be mid-roam.
+  // Toggling roaming off (Settings, or reduced-motion kicking in
+  // mid-session) cancels any peek in progress.
   useEffect(() => {
-    if (open) goRestNow()
+    if (!peekEffective) {
+      clearTimers()
+      setMotion('idle')
+      setPeeking(false)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [peekEffective])
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
@@ -342,33 +237,25 @@ export default function RexWidget() {
 
   return (
     <>
-      {/* Outer box is pointer-events: none — it's just a positioning frame,
-          it never blocks a click. Only the tightly-sized button inside,
-          matching the sprite itself, is actually clickable. */}
-      <div
-        className={['fixed z-40 pointer-events-none', pos ? '' : 'bottom-6 right-6'].join(' ')}
-        style={{
-          width: SIZE,
-          height: SIZE,
-          ...(pos
-            ? {
-                left: pos.left,
-                top: pos.top,
-                transitionProperty: roamEffective ? 'left, top' : 'none',
-                transitionDuration: `${pos.duration}ms`,
-                transitionTimingFunction: 'cubic-bezier(0.3, 0.85, 0.4, 1)',
-              }
-            : {}),
-        }}
-      >
-        <button
-          data-rex-launcher
-          onClick={() => setOpen((o) => !o)}
-          aria-label="Open Rex, your Proxpex assistant"
-          className="pointer-events-auto w-full h-full flex items-center justify-center"
+      {/* Fixed in the corner, permanently — no free-roaming. The outer box
+          is pointer-events: none and fully transparent (no card/background
+          behind Rex); only the tight inner button, matching the sprite
+          itself, is clickable. */}
+      <div className="fixed bottom-6 right-6 z-40 w-11 h-11 pointer-events-none overflow-visible">
+        <div
+          key={peekKey}
+          className={peeking ? 'rex-peek' : ''}
+          style={peeking ? { animationDuration: `${PEEK_SLIDE_MS}ms` } : undefined}
         >
-          <RexIcon variant="compact" state={open ? 'idle' : busy ? rexState : motion} still={!roamEffective} />
-        </button>
+          <button
+            data-rex-launcher
+            onClick={() => setOpen((o) => !o)}
+            aria-label="Open Rex, your Proxpex assistant"
+            className="pointer-events-auto w-11 h-11 flex items-center justify-center"
+          >
+            <RexIcon variant="compact" state={open ? 'idle' : busy ? rexState : motion} still={!peekEffective} />
+          </button>
+        </div>
       </div>
 
       {open && (
