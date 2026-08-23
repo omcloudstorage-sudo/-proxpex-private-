@@ -4,8 +4,74 @@ import { Check } from 'lucide-react'
 import { resolveStatusKind, getStatusDisplay, STATUS_KINDS } from '@/lib/statusLibrary'
 import PulseDot from '@/components/PulseDot'
 
-export default function RoadmapTimeline({ stages, activeStageId, onSelectStage, library }) {
+// orientation="horizontal" is used by the project detail page (the stage
+// bar now runs across the top of the page); "vertical" (default) keeps the
+// original left-column list used on the client/team dashboard widgets.
+export default function RoadmapTimeline({ stages, activeStageId, onSelectStage, library, orientation = 'vertical' }) {
   const sorted = [...stages].sort((a, b) => a.order - b.order)
+
+  if (orientation === 'horizontal') {
+    return (
+      <div className="w-full overflow-x-auto">
+        <div className="flex items-center gap-3 min-w-max pb-1">
+          {sorted.map((stage, i) => {
+            const isLast = i === sorted.length - 1
+            const isActive = stage.id === activeStageId
+            const kind = resolveStatusKind(stage.status, library)
+            const isDone = kind === STATUS_KINDS.DONE
+            const isCurrent = kind === STATUS_KINDS.IN_PROGRESS
+            const display = getStatusDisplay(stage.status, library)
+
+            return (
+              <div key={stage.id} className="flex items-center gap-3">
+                <button
+                  onClick={() => onSelectStage?.(stage)}
+                  className={[
+                    'flex items-center gap-3 text-left group rounded-xl px-3 py-2 transition-all duration-200 border flex-shrink-0',
+                    isActive ? 'bg-signal/10 border-signal/30 shadow-card' : 'border-transparent',
+                  ].filter(Boolean).join(' ')}
+                >
+                  <div
+                    className={[
+                      'w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 border-2 shadow-card transition-all duration-200 ease-out',
+                      isDone && 'bg-progress border-white text-white',
+                      isCurrent && !isDone && 'bg-surface text-signal glow-pulse',
+                      !isDone && !isCurrent && 'bg-surface border-line text-slate',
+                      isActive && 'scale-[1.14] ring-[3px] ring-offset-2 ring-offset-paper ring-signal/55 shadow-glow',
+                    ].filter(Boolean).join(' ')}
+                    style={isCurrent && !isDone ? { borderColor: display.color, color: display.color } : undefined}
+                  >
+                    {isDone ? <Check className="w-[18px] h-[18px]" strokeWidth={2.5} /> : <span className="text-base">{i + 1}</span>}
+                  </div>
+                  <div className="flex flex-col items-start gap-1 min-w-0">
+                    <span
+                      className={[
+                        'text-sm leading-snug truncate transition-all duration-200 max-w-[10rem]',
+                        isActive ? 'font-bold text-ink' : 'font-semibold',
+                        !isActive && (isDone ? 'text-progress' : 'text-slate'),
+                      ].filter(Boolean).join(' ')}
+                    >
+                      {stage.name}
+                    </span>
+                    {!isDone && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
+                        style={{ background: `${display.color}1a`, color: display.color }}
+                      >
+                        {isCurrent && <PulseDot color={display.color} />}
+                        {display.name}
+                      </span>
+                    )}
+                  </div>
+                </button>
+                {!isLast && <div className={['w-8 h-0.5 flex-shrink-0', isDone ? 'bg-progress' : 'bg-line'].join(' ')} />}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full">

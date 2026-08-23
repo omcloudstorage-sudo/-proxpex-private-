@@ -6,10 +6,12 @@ import { useAdminData } from '@/contexts/AdminDataContext'
 import { useStatusLibrary } from '@/lib/useStatusLibrary'
 import { usePriorityLibrary } from '@/lib/usePriorityLibrary'
 import { useRoadmapTemplates, useResourceTemplates } from '@/lib/useTemplates'
+import { useFeatureVisibility } from '@/lib/useFeatureVisibility'
 import StatusLibraryPanel from '@/components/StatusLibraryPanel'
 import PriorityLibraryPanel from '@/components/PriorityLibraryPanel'
 import RoadmapTemplatesPanel from '@/components/RoadmapTemplatesPanel'
 import ResourceTemplatesPanel from '@/components/ResourceTemplatesPanel'
+import FeatureVisibilityPanel from '@/components/FeatureVisibilityPanel'
 import AppearanceControls from '@/components/AppearanceControls'
 import RexPreferencesControls from '@/components/RexPreferencesControls'
 
@@ -20,6 +22,7 @@ export default function AdminSettingsPage() {
   const { library: priorityLibrary } = usePriorityLibrary(profile?.companyId, true)
   const { templates: roadmapTemplates } = useRoadmapTemplates(profile?.companyId)
   const { templates: resourceTemplates } = useResourceTemplates(profile?.companyId)
+  const { library: featureLibrary } = useFeatureVisibility(profile?.companyId, true)
 
   return (
     <div className="page-fade">
@@ -64,6 +67,7 @@ export default function AdminSettingsPage() {
             <RoadmapTemplatesPanel companyId={profile.companyId} templates={roadmapTemplates} library={library} />
             <ResourceTemplatesPanel companyId={profile.companyId} templates={resourceTemplates} />
           </div>
+          <FeatureVisibilityPanel companyId={profile.companyId} library={featureLibrary} />
         </div>
       )}
     </div>

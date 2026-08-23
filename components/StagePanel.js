@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Pencil, Trash2, Plus, Check, X, Video, ShieldCheck, MessageSquare, ClipboardList } from 'lucide-react'
-import { normalizeStage, newUpdate } from '@/lib/stages'
+import { Pencil, Trash2, Plus, Check, X, Video, ShieldCheck, ClipboardList } from 'lucide-react'
+import { normalizeStage } from '@/lib/stages'
 import { MOM_STATUS, MOM_STATUS_LABELS } from '@/lib/momEntries'
 import { getStatusDisplay, resolveStatusKind, STATUS_KIND_OPTIONS, STATUS_KINDS } from '@/lib/statusLibrary'
 import { AUDIT_ACTIONS } from '@/lib/auditLog'
@@ -17,7 +17,6 @@ const INVOICES_UI_ENABLED = false
 export default function StagePanel({
   stage,
   canManage,
-  canPostUpdate,
   currentUser,
   onChange,
   logAction,
@@ -136,30 +135,17 @@ export default function StagePanel({
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 h-[400px] flex flex-col">
-          <TeamUpdates
-            updates={local.updates}
-            canPost={canPostUpdate}
-            currentUser={currentUser}
-            onChange={(updates) => commit({ updates })}
-            logAction={logAction}
-            stageId={local.id}
-            stageName={local.name}
-          />
-        </div>
-        <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 h-[400px] flex flex-col">
-          <MomPanel
-            entries={momEntries}
-            canManage={canManage}
-            currentUser={currentUser}
-            onCreate={onCreateMom}
-            onUpdate={onUpdateMom}
-            onDelete={onDeleteMom}
-            onApprove={onApproveMom}
-            onSubmit={(id) => onUpdateMom?.(id, { status: MOM_STATUS.PENDING })}
-          />
-        </div>
+      <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 h-[400px] flex flex-col">
+        <MomPanel
+          entries={momEntries}
+          canManage={canManage}
+          currentUser={currentUser}
+          onCreate={onCreateMom}
+          onUpdate={onUpdateMom}
+          onDelete={onDeleteMom}
+          onApprove={onApproveMom}
+          onSubmit={(id) => onUpdateMom?.(id, { status: MOM_STATUS.PENDING })}
+        />
       </div>
 
       {INVOICES_UI_ENABLED && (
@@ -171,148 +157,6 @@ export default function StagePanel({
           stageName={local.name}
         />
       )}
-    </div>
-  )
-}
-
-function TeamUpdates({ updates, canPost, currentUser, onChange, logAction, stageId, stageName }) {
-  const [adding, setAdding] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [draft, setDraft] = useState(null)
-  const [openEntry, setOpenEntry] = useState(null)
-
-  const sorted = [...(updates || [])].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-
-  function startAdd() {
-    setDraft(newUpdate(currentUser))
-    setAdding(true)
-    setEditingId(null)
-  }
-  function startEdit(entry) {
-    setDraft({ ...entry })
-    setEditingId(entry.id)
-    setAdding(false)
-  }
-  function cancelDraft() {
-    setDraft(null)
-    setAdding(false)
-    setEditingId(null)
-  }
-  function saveDraft() {
-    if (!draft.text.trim()) return cancelDraft()
-    if (adding) {
-      onChange([...(updates || []), draft])
-      logAction?.(AUDIT_ACTIONS.TEAM_UPDATE_POSTED, `Posted a team update on "${stageName}"`, stageId)
-    } else {
-      onChange((updates || []).map((e) => (e.id === draft.id ? draft : e)))
-    }
-    cancelDraft()
-  }
-  function removeEntry(id) {
-    onChange((updates || []).filter((e) => e.id !== id))
-  }
-  function canEditEntry(entry) {
-    return currentUser?.role === 'admin' || (entry.authorId && entry.authorId === currentUser?.uid)
-  }
-
-  return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between mb-1 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-ink" strokeWidth={1.75} />
-          <span className="font-display text-xl font-semibold text-ink uppercase tracking-wide">Team Updates</span>
-        </div>
-        {canPost && !adding && (
-          <button onClick={startAdd} className="text-ink hover:text-signal flex items-center gap-1 text-sm font-semibold flex-shrink-0">
-            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Post
-          </button>
-        )}
-      </div>
-      <p className="text-sm text-slate mb-4 flex-shrink-0">Casual notes — anyone on the team can post.</p>
-
-      {adding && <div className="mb-2.5 flex-shrink-0"><UpdateForm draft={draft} setDraft={setDraft} onSave={saveDraft} onCancel={cancelDraft} /></div>}
-
-      <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 min-h-0">
-        {sorted.length === 0 && !adding && (
-          <p className="text-sm text-slate-light italic">
-            No updates yet{canPost ? ' — be the first to post one.' : '.'}
-          </p>
-        )}
-
-        {sorted.map((entry) =>
-          editingId === entry.id ? (
-            <UpdateForm key={entry.id} draft={draft} setDraft={setDraft} onSave={saveDraft} onCancel={cancelDraft} />
-          ) : (
-            <div
-              key={entry.id}
-              onClick={() => setOpenEntry(entry)}
-              className="bg-paper border border-line rounded-lg px-4 py-3.5 text-sm cursor-pointer hover:border-ink/20 transition-colors"
-            >
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="flex items-center gap-2 text-xs text-slate min-w-0">
-                  <span className="font-semibold text-ink truncate">{entry.authorName || 'Unknown'}</span>
-                  <span className="text-slate-light flex-shrink-0">{formatTimestamp(entry.createdAt)}</span>
-                  {entry.meetingLink && (
-                    <a href={entry.meetingLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-signal hover:underline flex-shrink-0">
-                      <Video className="w-3 h-3" strokeWidth={2} /> Meeting
-                    </a>
-                  )}
-                </div>
-                {canEditEntry(entry) && (
-                  <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => startEdit(entry)} className="text-slate-light hover:text-ink"><Pencil className="w-3.5 h-3.5" strokeWidth={1.75} /></button>
-                    <button onClick={() => removeEntry(entry.id)} className="text-slate-light hover:text-coral"><Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} /></button>
-                  </div>
-                )}
-              </div>
-              <p className="text-ink whitespace-pre-wrap break-words leading-relaxed line-clamp-2">{entry.text}</p>
-            </div>
-          )
-        )}
-      </div>
-
-      <EntryModal
-        open={!!openEntry}
-        onClose={() => setOpenEntry(null)}
-        title={openEntry?.authorName || 'Unknown'}
-        meta={openEntry && (
-          <>
-            <span>{formatTimestamp(openEntry.createdAt)}</span>
-            {openEntry.meetingLink && (
-              <a href={openEntry.meetingLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-signal hover:underline">
-                <Video className="w-3 h-3" strokeWidth={2} /> Meeting
-              </a>
-            )}
-          </>
-        )}
-      >
-        {openEntry?.text}
-      </EntryModal>
-    </div>
-  )
-}
-
-function UpdateForm({ draft, setDraft, onSave, onCancel }) {
-  return (
-    <div className="border border-signal/40 rounded-lg px-3 py-2.5 bg-signal-light/30 space-y-2">
-      <textarea
-        autoFocus
-        value={draft.text}
-        onChange={(e) => setDraft({ ...draft, text: e.target.value })}
-        rows={3}
-        placeholder="What happened, decisions, action items…"
-        className="w-full border border-line rounded-lg px-3 py-2 text-sm outline-none focus:border-signal resize-none bg-surface"
-      />
-      <input
-        placeholder="Meeting link (Google Meet, Zoom…) — optional"
-        value={draft.meetingLink || ''}
-        onChange={(e) => setDraft({ ...draft, meetingLink: e.target.value })}
-        className="w-full border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-signal bg-surface"
-      />
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="text-xs font-medium px-2.5 py-1.5 rounded-lg text-slate hover:text-ink flex items-center gap-1"><X className="w-3.5 h-3.5" /> Cancel</button>
-        <button onClick={onSave} className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-signal text-white hover:bg-signal-dark flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Post</button>
-      </div>
     </div>
   )
 }

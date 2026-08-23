@@ -63,6 +63,16 @@ service cloud.firestore {
         allow read: if signedIn() && me().companyId == companyId;
         allow write: if signedIn() && me().companyId == companyId && (me().role == 'admin' || me().role == 'pm');
       }
+
+      // --- Feature visibility (subcollection) ---
+      // Company-wide toggles (e.g. Sprint Planner) for hiding/showing a
+      // feature to PM/Client roles. Everyone in the company can read (a
+      // PM/Client needs to know whether a feature is hidden from them);
+      // only Admin can write.
+      match /featureVisibility/{featureId} {
+        allow read: if signedIn() && me().companyId == companyId;
+        allow write: if signedIn() && me().companyId == companyId && me().role == 'admin';
+      }
     }
 
     // --- projects ---
@@ -133,6 +143,78 @@ service cloud.firestore {
           request.auth.uid == project().clientId
         );
         allow update, delete: if false;
+      }
+
+      // --- Tasks (subcollection) — Sprint/Kanban board ---
+      // A subtask is a task doc with parentTaskId set, one level deep only.
+      // Read: anyone with project access, including Client (read-only).
+      // Create/update/delete: Admin, the assigned PM, and that PM's team
+      // members only — never Client.
+      match /tasks/{taskId} {
+        function project() {
+          return get(/databases/$(database)/documents/projects/$(projectId)).data;
+        }
+        function hasProjectAccess() {
+          return me().companyId == project().companyId ||
+                 request.auth.uid == project().pmId ||
+                 request.auth.uid == project().clientId;
+        }
+        function canManageTasks() {
+          return (me().role == 'admin' && me().companyId == project().companyId) ||
+                 (me().role == 'pm' && request.auth.uid == project().pmId) ||
+                 (me().role == 'team_member' && me().pmId == project().pmId);
+        }
+        // One-level-deep guard: a subtask (parentTaskId != null) may only be
+        // created if its parent task is itself a top-level task
+        // (parent.parentTaskId == null) — a subtask can never have its own
+        // subtasks.
+        function parentIsTopLevel() {
+          return request.resource.data.parentTaskId == null ||
+                 get(/databases/$(database)/documents/projects/$(projectId)/tasks/$(request.resource.data.parentTaskId)).data.parentTaskId == null;
+        }
+
+        allow read: if signedIn() && hasProjectAccess();
+        allow create: if signedIn() && canManageTasks() && parentIsTopLevel();
+        allow update, delete: if signedIn() && canManageTasks();
+
+        // --- Comments (subcollection) — append-only ---
+        // Read AND create by anyone with project access, including Client.
+        // No update/delete on existing comments, ever.
+        match /comments/{commentId} {
+          function project() {
+            return get(/databases/$(database)/documents/projects/$(projectId)).data;
+          }
+          function hasProjectAccess() {
+            return me().companyId == project().companyId ||
+                   request.auth.uid == project().pmId ||
+                   request.auth.uid == project().clientId;
+          }
+
+          allow read: if signedIn() && hasProjectAccess();
+          allow create: if signedIn() && hasProjectAccess() && request.resource.data.authorId == request.auth.uid;
+          allow update, delete: if false;
+        }
+      }
+
+      // --- Team Updates (subcollection) — project-wide feed ---
+      // Migrated off the per-stage stage.updates[] array. Anyone with
+      // project access can read/post; edit/delete restricted to Admin or
+      // the original author, matching the old per-stage behavior.
+      match /teamUpdates/{updateId} {
+        function project() {
+          return get(/databases/$(database)/documents/projects/$(projectId)).data;
+        }
+        function hasProjectAccess() {
+          return me().companyId == project().companyId ||
+                 request.auth.uid == project().pmId ||
+                 request.auth.uid == project().clientId;
+        }
+
+        allow read: if signedIn() && hasProjectAccess();
+        allow create: if signedIn() && hasProjectAccess() && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if signedIn() && hasProjectAccess() && (
+          me().role == 'admin' || request.auth.uid == resource.data.authorId
+        );
       }
     }
   }
