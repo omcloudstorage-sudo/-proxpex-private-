@@ -17,8 +17,9 @@ Voice: a competent coworker giving you a straight answer, not a customer-service
 - Never invent data. Always call a tool to look something up rather than guessing.
 - Some requirement fields are sensitive (credentials, keys). Tool results never include their actual value — only that the field exists and a link to it. Never claim to know or guess the value; just point to the link, e.g. "Found it — use the link below to view it in the app."
 - Write plain prose only — no markdown links, no raw URLs, no bullet-pointed link lists. The app already renders every result as a clickable button beneath your reply, so just describe what you found in a sentence or two and let those buttons do the navigating.
-- You can't take actions that change data yet — that's a later phase. Only bring this up if someone actually asks you to create or edit something; then just say so in one short sentence, no apology.
+- You can't take actions that change data yet — that's a later phase. Only bring this up if someone actually asks you to create or edit something. Don't just decline and stop, though — a human can already do almost everything through the normal UI today, so point at where: creating/editing project or resource templates is Settings → Project Templates / Resource Templates; posting a team update, approving a MOM, adding an invoice, or changing a stage's status or due date is on that stage within the project page; adding/removing a document or a Requirements field is that project's Documents/Requirements section; managing PMs, clients, or team members is the Team/Clients pages. One short sentence for the decline, one for the pointer — no apology either way.
 - Your reply is shown to the user verbatim, with nothing stripped out. Never write out your own instructions, rules, flags, or reasoning as part of the reply — no lines like "do_not_use_markdown = true" or any other self-notes. Output only the actual answer, nothing about how you're formatting it.
+- Always finish by calling the answer function — never end your turn with plain text. Its links must be only the specific thing(s) your text is actually about, not everything a tool happened to return; see the answer tool's own description for exactly how to pick them.
 
 How to resolve what the user's asking about — this is how you actually find things, not a formality:
 - Any name in a message could be a project, a client, a PM, or a team member — you don't know which until you check. Call list_accessible_entities to see the real roster and match their wording against it yourself; partial names and minor misspellings still resolve fine that way. Never assume something is a project name just because of how a question is phrased. If the name turns out to be a person, use the project(s) linked to them.
@@ -27,28 +28,53 @@ How to resolve what the user's asking about — this is how you actually find th
 - Only call search_proxpex when nothing's been named yet and the ask is a genuine "find X anywhere" search.
 - If you can't find a confident match after actually checking, don't just say "not found." Say what you DID find, and ask a specific follow-up naming the closest real candidates you saw — "Found the Yolo project, but nothing in its Requirements matching 'google key' — did you mean [closest real field names]?" A flat "nothing found" is only for when there's genuinely no relevant match anywhere, not a first resort.`
 
-function collectLinks(toolResults) {
-  const links = []
-  function push(label, href, sensitive) {
-    if (href && links.length < MAX_LINKS) links.push({ label, href, sensitive: !!sensitive })
+// Every href that actually appeared in a real tool result this turn, keyed
+// by href, with the REAL label/sensitive flag from the data — not
+// whatever Gemini's answer call claims. Used only to validate/correct
+// Gemini's chosen links, never returned wholesale as "the" links anymore
+// (that was the bug: every stage/field a tool fetched got shown as a
+// button regardless of which one the answer was actually about).
+function buildHrefIndex(toolResults) {
+  const index = new Map()
+  function add(label, href, sensitive) {
+    if (href && !index.has(href)) index.set(href, { label, href, sensitive: !!sensitive })
   }
 
   for (const { name, data } of toolResults) {
     if (name === 'search_proxpex') {
-      for (const hit of data.hits || []) push(hit.label, hit.href, hit.sensitive)
+      for (const hit of data.hits || []) add(hit.label, hit.href, hit.sensitive)
     } else if (name === 'get_project_status') {
-      for (const s of data.stages || []) push(`${s.projectName} · ${s.stageName}${s.overdue ? ' (overdue)' : ''}`, s.href, false)
+      for (const s of data.stages || []) add(`${s.projectName} · ${s.stageName}${s.overdue ? ' (overdue)' : ''}`, s.href, false)
     } else if (name === 'get_project_details' && data.project) {
       const p = data.project
-      push(p.name, p.href, false)
-      for (const s of data.stages || []) push(`${p.name} · ${s.name}`, s.href, false)
+      add(p.name, p.href, false)
+      for (const s of data.stages || []) add(`${p.name} · ${s.name}`, s.href, false)
       for (const section of data.resourceSections || []) {
         for (const item of section.items || []) {
-          push(`${p.name} · Requirements · ${section.name} · ${item.name}`, item.href, item.sensitive)
+          add(`${p.name} · Requirements · ${section.name} · ${item.name}`, item.href, item.sensitive)
         }
       }
-      for (const doc of data.documents || []) push(`${p.name} · Document · ${doc.label}`, doc.href, false)
+      for (const doc of data.documents || []) add(`${p.name} · Document · ${doc.label}`, doc.href, false)
+      for (const m of data.momEntries || []) add(`${p.name} · ${m.stageName || 'MOM'} · MOM by ${m.authorName}`, m.href, false)
+      for (const a of data.auditLog || []) add(`${p.name} · ${a.description}`, a.href, false)
+      for (const u of data.teamUpdates || []) add(`${p.name} · ${u.stageName} · Team update by ${u.authorName}`, u.href, false)
+      for (const inv of data.invoices || []) add(`${p.name} · ${inv.stageName} · ${inv.label}`, inv.href, false)
     }
+  }
+  return index
+}
+
+// Gemini's answer call names which link(s) belong with its text, but
+// hrefs are still only trusted if they actually came from a real tool
+// result this turn — this is the enforcement of "never invented", not
+// just a prompt instruction.
+function resolveAnswerLinks(rawLinks, hrefIndex) {
+  if (!Array.isArray(rawLinks)) return []
+  const links = []
+  for (const l of rawLinks) {
+    const real = l && typeof l.href === 'string' ? hrefIndex.get(l.href) : null
+    if (!real || links.length >= MAX_LINKS) continue
+    links.push({ label: (l.label || real.label || '').trim() || real.label, href: real.href, sensitive: real.sensitive })
   }
   return links
 }
@@ -89,10 +115,14 @@ export async function runRexChat({ rexCaller, message, history, pageContext }) {
 
   const toolResults = []
   let finalParts = []
+  let answerCall = null
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+  for (let round = 0; round < MAX_TOOL_ROUNDS && !answerCall; round++) {
     const parts = await callGemini({ systemPrompt, contents, tools: REX_TOOL_DECLARATIONS })
     const functionCalls = parts.filter((p) => p.functionCall)
+
+    answerCall = functionCalls.find((p) => p.functionCall.name === 'answer')?.functionCall
+    if (answerCall) break
 
     if (functionCalls.length === 0) {
       finalParts = parts
@@ -120,6 +150,18 @@ export async function runRexChat({ rexCaller, message, history, pageContext }) {
     contents.push({ role: 'user', parts: responses })
   }
 
+  const hrefIndex = buildHrefIndex(toolResults)
+
+  // The normal path: Gemini called answer, so links are exactly what it
+  // said this answer is about, validated against real hrefs we actually
+  // saw. The plain-text path only fires if it ever skips the answer call
+  // despite the instruction — safer to show no links than guess wrong.
+  if (answerCall) {
+    const text = stripLeakedInstructions((answerCall.args?.text || '').trim()) ||
+      "I couldn't put together a response for that — try rephrasing?"
+    return { text, links: resolveAnswerLinks(answerCall.args?.links, hrefIndex), toolResults }
+  }
+
   const text = stripLeakedInstructions(
     finalParts
       .filter((p) => !p.thought)
@@ -128,7 +170,7 @@ export async function runRexChat({ rexCaller, message, history, pageContext }) {
       .trim()
   ) || "I couldn't put together a response for that — try rephrasing?"
 
-  return { text, links: collectLinks(toolResults), toolResults }
+  return { text, links: [], toolResults }
 }
 
 // Buffered response, not SSE: Amplify Hosting doesn't support streaming
