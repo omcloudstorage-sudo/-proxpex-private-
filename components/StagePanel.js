@@ -14,6 +14,9 @@ import InvoicesPanel from '@/components/InvoicesPanel'
 // ships in a later round. Data/logic stays intact — flip this back on then.
 const INVOICES_UI_ENABLED = false
 
+// `bare` drops the outer card chrome (and the "select a stage" empty-state
+// card) so the parent — the stage-tracker card on the project page — can
+// render this content inline instead of as its own separate section.
 export default function StagePanel({
   stage,
   canManage,
@@ -23,12 +26,14 @@ export default function StagePanel({
   statusOptions,
   onAddStatus,
   maxStatuses,
+  bare = false,
 }) {
   const [local, setLocal] = useState(stage ? normalizeStage(stage) : null)
 
   useEffect(() => setLocal(stage ? normalizeStage(stage) : null), [stage])
 
   if (!local) {
+    if (bare) return null
     return (
       <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-8 text-center text-slate text-sm">
         Select a stage to view its details.
@@ -61,10 +66,82 @@ export default function StagePanel({
   const daysLeft = getDaysLeft(local.dueDate)
   const isDone = resolveStatusKind(local.status, statusOptions) === STATUS_KINDS.DONE
 
-  return (
-    <div className="space-y-6">
-      <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 md:p-7">
-        <div className="flex items-start justify-between gap-4 mb-5">
+  // Compact single-row variant — name, status, and next milestone all inline
+  // — used above the stage-tracker breadcrumb where space is at a premium
+  // (the main goal on this screen is reaching the Sprint Board quickly).
+  if (bare) {
+    return (
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {canManage ? (
+            <input
+              value={local.name}
+              onChange={(e) => commit({ name: e.target.value })}
+              className="font-display text-lg font-semibold text-ink tracking-tight bg-transparent outline-none border-b border-transparent focus:border-line -ml-0.5 px-0.5 min-w-0"
+            />
+          ) : (
+            <h3 className="font-display text-lg font-semibold text-ink tracking-tight truncate">{local.name}</h3>
+          )}
+          <StatusBadge status={local.status} statusOptions={statusOptions} />
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap flex-shrink-0">
+          {canManage && (
+            <div className="relative flex items-center gap-1.5">
+              <select
+                value={local.status}
+                onChange={(e) => changeStatus(e.target.value)}
+                className="text-xs bg-paper border border-line rounded-lg px-2.5 py-1.5 font-medium text-ink outline-none focus:border-signal"
+              >
+                {(statusOptions || []).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              {onAddStatus && <AddStatusButton onAdd={onAddStatus} disabled={(statusOptions || []).length >= (maxStatuses || Infinity)} maxStatuses={maxStatuses} />}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-medium uppercase tracking-wide text-slate-light">Next milestone</span>
+            {isDone ? (
+              <span className="inline-flex items-center gap-1 font-medium text-progress">
+                <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+                Completed{local.completedAt ? ` ${formatDate(local.completedAt)}` : ''}
+              </span>
+            ) : canManage ? (
+              <input
+                type="date"
+                value={local.dueDate || ''}
+                onChange={(e) => changeDueDate(e.target.value)}
+                className="bg-surface border border-line rounded-lg px-2 py-1 text-xs text-ink outline-none focus:border-signal"
+              />
+            ) : (
+              <span className="text-ink">{local.dueDate || '—'}</span>
+            )}
+          </div>
+
+          {!isDone && daysLeft !== null && (
+            <span
+              className={[
+                'text-[11px] font-medium px-2.5 py-1 rounded-full border flex-shrink-0',
+                daysLeft < 0
+                  ? 'bg-coral-light text-coral border-coral/20'
+                  : daysLeft <= 3
+                    ? 'bg-amber-light text-amber border-amber/20'
+                    : 'bg-progress/10 text-progress border-progress/20',
+              ].join(' ')}
+            >
+              {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? 'Due today' : `${daysLeft}d remaining`}
+            </span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const inner = (
+    <>
+      <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex items-center gap-3">
             {canManage ? (
               <input
@@ -128,6 +205,13 @@ export default function StagePanel({
             </span>
           )}
         </div>
+    </>
+  )
+
+  return (
+    <div className="space-y-6">
+      <div className="card-hover bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 md:p-7">
+        {inner}
       </div>
 
       {INVOICES_UI_ENABLED && (
@@ -145,10 +229,10 @@ export default function StagePanel({
 
 // Rendered by the project page as its own collapsible section (not inside
 // the stage header card) — see app/project/[id]/page.js.
-export function MomPanel({ entries, canManage, currentUser, onCreate, onUpdate, onDelete, onApprove, onSubmit }) {
-  const [adding, setAdding] = useState(false)
+export function MomPanel({ entries, canManage, currentUser, onCreate, onUpdate, onDelete, onApprove, onSubmit, startInAdd = false }) {
+  const [adding, setAdding] = useState(startInAdd)
   const [editingId, setEditingId] = useState(null)
-  const [draft, setDraft] = useState(null)
+  const [draft, setDraft] = useState(startInAdd ? { text: '', meetingLink: '', date: '' } : null)
   const [openEntry, setOpenEntry] = useState(null)
 
   const isClient = currentUser?.role === 'client'

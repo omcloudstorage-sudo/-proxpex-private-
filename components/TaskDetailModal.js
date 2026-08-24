@@ -43,6 +43,11 @@ export default function TaskDetailModal({
 
   useEffect(() => setMounted(true), [])
   useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+  useEffect(() => {
     if (!openSubtaskId) return
     function onKey(e) {
       if (e.key === 'Escape') setOpenSubtaskId(null)

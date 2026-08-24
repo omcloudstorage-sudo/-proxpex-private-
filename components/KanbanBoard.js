@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { doc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { Plus, LayoutGrid, Pencil, Check, X } from 'lucide-react'
+import { Plus, LayoutGrid, Pencil, Check, X, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react'
 import TaskCard from '@/components/TaskCard'
 import ProgressBar from '@/components/ProgressBar'
+import TeamUpdatesPanel from '@/components/TeamUpdatesPanel'
 import { subtaskProgress } from '@/lib/tasks'
 import { newColumn, TODO_COLUMN_ID, DONE_COLUMN_ID } from '@/lib/kanbanColumns'
+
+const COLUMN_WIDTH = 272 // px — matches the fixed-width column below, used to page the scroll buttons
 
 // Renders one stage's board. `tasks` are already filtered to this stage's
 // top-level tasks (parentTaskId == null) by the caller; subtasks never
@@ -15,7 +18,11 @@ import { newColumn, TODO_COLUMN_ID, DONE_COLUMN_ID } from '@/lib/kanbanColumns'
 // parent card's "X of Y subtasks done" secondary indicator. `columns` is the
 // company's Kanban column library (fixed To Do first, fixed Done last,
 // custom columns in between — see lib/kanbanColumns.js), passed in already
-// ordered by the caller via useKanbanColumns.
+// ordered by the caller via useKanbanColumns. Columns render in a single
+// horizontally-scrolling row (with the "+ Add column" tile inline) so the
+// board can grow past the viewport width instead of wrapping — the chevron
+// buttons page through it. Team Updates renders as a dropdown anchored to
+// this board's header rather than a page-level section.
 export default function KanbanBoard({
   tasks,
   subtasksByParent,
@@ -27,12 +34,48 @@ export default function KanbanBoard({
   onOpenTask,
   onCreateTask,
   onMoveTask,
+  teamUpdates,
+  canPostUpdate,
+  currentUser,
+  onPostUpdate,
+  onEditUpdate,
+  onDeleteUpdate,
+  stages,
 }) {
   const [dragTaskId, setDragTaskId] = useState(null)
+  const [updatesOpen, setUpdatesOpen] = useState(false)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+  const scrollRef = useRef(null)
+  const updatesRef = useRef(null)
 
   const done = tasks.filter((t) => t.status === DONE_COLUMN_ID).length
   const total = tasks.length
   const pct = total ? Math.round((done / total) * 100) : 0
+
+  useEffect(() => {
+    if (!updatesOpen) return
+    function onClickOutside(e) {
+      if (updatesRef.current && !updatesRef.current.contains(e.target)) setUpdatesOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [updatesOpen])
+
+  function updateScrollState() {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }
+
+  useEffect(() => {
+    updateScrollState()
+  }, [columns.length])
+
+  function scrollByPage(dir) {
+    scrollRef.current?.scrollBy({ left: dir * COLUMN_WIDTH * 2, behavior: 'smooth' })
+  }
 
   function handleDragStart(e, task) {
     setDragTaskId(task.id)
@@ -64,6 +107,30 @@ export default function KanbanBoard({
           <LayoutGrid className="w-[18px] h-[18px] text-ink" strokeWidth={1.75} />
           <span className="font-display text-xl font-semibold text-ink uppercase tracking-wide">Sprint board</span>
         </div>
+
+        {onPostUpdate && (
+          <div className="relative" ref={updatesRef}>
+            <button
+              onClick={() => setUpdatesOpen((v) => !v)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-ink px-3 py-1.5 rounded-lg border border-line hover:border-ink/30 transition-colors"
+            >
+              <MessageSquare className="w-4 h-4" strokeWidth={1.75} /> Team Updates
+            </button>
+            {updatesOpen && (
+              <div className="absolute z-20 top-full right-0 mt-2 w-[360px] max-h-[70vh] overflow-y-auto bg-surface border border-line rounded-card shadow-card p-5">
+                <TeamUpdatesPanel
+                  updates={teamUpdates}
+                  canPost={canPostUpdate}
+                  currentUser={currentUser}
+                  onPost={onPostUpdate}
+                  onEdit={onEditUpdate}
+                  onDelete={onDeleteUpdate}
+                  stages={stages}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {total > 0 && (
@@ -76,52 +143,80 @@ export default function KanbanBoard({
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-        {columns.map((col) => {
-          const colTasks = tasks.filter((t) => t.status === col.id)
-          return (
-            <div
-              key={col.id}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleDrop(e, col.id)}
-              className="bg-paper/60 border border-line rounded-lg p-4 flex flex-col"
-            >
-              <ColumnHeader
-                column={col}
-                count={colTasks.length}
-                canManage={canManage}
-                onRename={(name) => renameColumn(col.id, name)}
-              />
-              <div className="space-y-3 overflow-y-auto max-h-[480px] pr-0.5 flex-1 min-h-[80px]">
-                {colTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    priorityLibrary={priorityLibrary}
-                    assignees={assignees}
-                    subtaskCount={subtaskProgress(subtasksByParent[task.id])}
-                    onClick={() => onOpenTask(task)}
-                    draggable={canManage}
-                    onDragStart={handleDragStart}
-                  />
-                ))}
-                {colTasks.length === 0 && (
-                  <p className="text-xs text-slate-light italic px-1 py-1">No tasks.</p>
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          onScroll={updateScrollState}
+          className="flex items-start gap-4 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {columns.map((col) => {
+            const colTasks = tasks.filter((t) => t.status === col.id)
+            return (
+              <div
+                key={col.id}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleDrop(e, col.id)}
+                style={{ width: COLUMN_WIDTH }}
+                className="flex-shrink-0 bg-paper/60 border border-line rounded-lg p-4 flex flex-col"
+              >
+                <ColumnHeader
+                  column={col}
+                  count={colTasks.length}
+                  canManage={canManage}
+                  onRename={(name) => renameColumn(col.id, name)}
+                />
+                <div className="space-y-3 overflow-y-auto max-h-[480px] pr-0.5 flex-1 min-h-[80px]">
+                  {colTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      priorityLibrary={priorityLibrary}
+                      assignees={assignees}
+                      subtaskCount={subtaskProgress(subtasksByParent[task.id])}
+                      onClick={() => onOpenTask(task)}
+                      draggable={canManage}
+                      onDragStart={handleDragStart}
+                    />
+                  ))}
+                  {colTasks.length === 0 && (
+                    <p className="text-xs text-slate-light italic px-1 py-1">No tasks.</p>
+                  )}
+                </div>
+                {canManage && (
+                  <button
+                    onClick={() => onCreateTask(col.id)}
+                    className="mt-3 flex-shrink-0 text-ink hover:text-signal flex items-center gap-1 text-xs font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add task
+                  </button>
                 )}
               </div>
-              {canManage && (
-                <button
-                  onClick={() => onCreateTask(col.id)}
-                  className="mt-3 flex-shrink-0 text-ink hover:text-signal flex items-center gap-1 text-xs font-semibold"
-                >
-                  <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add task
-                </button>
-              )}
-            </div>
-          )
-        })}
+            )
+          })}
 
-        {canManage && <AddColumnControl onAdd={addColumn} />}
+          {canManage && (
+            <div style={{ width: COLUMN_WIDTH }} className="flex-shrink-0">
+              <AddColumnControl onAdd={addColumn} />
+            </div>
+          )}
+        </div>
+
+        {canScrollLeft && (
+          <button
+            onClick={() => scrollByPage(-1)}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-signal text-white flex items-center justify-center shadow-card hover:bg-signal-dark transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+        )}
+        {canScrollRight && (
+          <button
+            onClick={() => scrollByPage(1)}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-8 h-8 rounded-full bg-signal text-white flex items-center justify-center shadow-card hover:bg-signal-dark transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+        )}
       </div>
     </div>
   )
@@ -181,7 +276,7 @@ function AddColumnControl({ onAdd }) {
     return (
       <button
         onClick={() => setAdding(true)}
-        className="border border-dashed border-line rounded-lg p-4 flex items-center justify-center gap-1.5 text-sm font-semibold text-slate hover:text-ink hover:border-ink/30 transition-colors min-h-[120px]"
+        className="w-full border border-dashed border-line rounded-lg p-4 flex items-center justify-center gap-1.5 text-sm font-semibold text-slate hover:text-ink hover:border-ink/30 transition-colors min-h-[120px]"
       >
         <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add column
       </button>

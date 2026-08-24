@@ -4,11 +4,14 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
-export default function EntryModal({ open, onClose, title, meta, children }) {
+// Generic large modal shell used by the Resources, Documents, and MOM cards
+// on the project page — each card is a small trigger, its content opens here
+// instead of expanding inline. Portaled directly under <body> for the same
+// reason as EntryModal (backdrop-blur ancestors trap position:fixed).
+export default function Modal({ open, onClose, icon: Icon, title, children }) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => setMounted(true), [])
-
   useEffect(() => {
     if (!open) return
     function onKey(e) {
@@ -28,28 +31,22 @@ export default function EntryModal({ open, onClose, title, meta, children }) {
 
   if (!open || !mounted) return null
 
-  // Rendered via portal directly under <body> — several ancestors in this
-  // app use backdrop-blur/filter, which creates a CSS containing block that
-  // traps position:fixed descendants instead of the viewport. Portaling out
-  // of that subtree is what makes `fixed inset-0` actually cover the screen.
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div
-        className="bg-surface rounded-card shadow-card border border-line max-w-lg w-full max-h-[80vh] flex flex-col"
+        className="bg-surface rounded-card shadow-card border border-line w-[95vw] max-w-6xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-line flex-shrink-0">
-          <div className="min-w-0">
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-line flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            {Icon && <Icon className="w-5 h-5 text-ink flex-shrink-0" strokeWidth={1.75} />}
             <h4 className="font-display text-lg font-semibold text-ink truncate">{title}</h4>
-            {meta && <div className="text-xs text-slate mt-1 flex items-center gap-2 flex-wrap">{meta}</div>}
           </div>
           <button onClick={onClose} className="text-slate-light hover:text-ink flex-shrink-0">
             <X className="w-5 h-5" strokeWidth={1.75} />
           </button>
         </div>
-        <div className="px-6 py-5 overflow-y-auto text-sm text-ink whitespace-pre-wrap break-words leading-relaxed">
-          {children}
-        </div>
+        <div className="px-6 py-5 overflow-auto flex-1">{children}</div>
       </div>
     </div>,
     document.body

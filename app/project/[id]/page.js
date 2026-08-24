@@ -6,20 +6,20 @@ import {
   doc, onSnapshot, updateDoc, collection, query, where, orderBy, limit,
   addDoc, deleteDoc, getDocs, serverTimestamp,
 } from 'firebase/firestore'
-import { ClipboardList, FileText, MessageSquare, History } from 'lucide-react'
+import { ClipboardList, FileText, History, Settings } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import TopNav from '@/components/TopNav'
+import ProjectSideBar from '@/components/ProjectSideBar'
 import RoadmapTimeline from '@/components/RoadmapTimeline'
 import StagePanel, { MomPanel } from '@/components/StagePanel'
 import KanbanBoard from '@/components/KanbanBoard'
 import TaskDetailModal from '@/components/TaskDetailModal'
-import TeamUpdatesPanel from '@/components/TeamUpdatesPanel'
 import AuditLogPanel from '@/components/AuditLogPanel'
 import DocumentsPanel from '@/components/DocumentsPanel'
 import ResourcesPanel from '@/components/ResourcesPanel'
 import ProgressBar from '@/components/ProgressBar'
 import CollapsibleSection from '@/components/CollapsibleSection'
+import Modal from '@/components/Modal'
 import { newStage } from '@/lib/stages'
 import { newTeamUpdate, migrateStageUpdatesToProjectFeed } from '@/lib/teamUpdates'
 import { newTaskDraft, isSubtask } from '@/lib/tasks'
@@ -64,7 +64,23 @@ function ProjectDetailPageInner() {
   const [tasks, setTasks] = useState([])
   const [teamUpdates, setTeamUpdates] = useState([])
   const [openTaskId, setOpenTaskId] = useState(null)
+  const [resourcesOpen, setResourcesOpen] = useState(false)
+  const [documentsOpen, setDocumentsOpen] = useState(false)
+  const [momOpen, setMomOpen] = useState(false)
+  const [momStartInAdd, setMomStartInAdd] = useState(false)
+  const [stageConfigOpen, setStageConfigOpen] = useState(false)
+  const stageConfigRef = useRef(null)
   const migrationRan = useRef(false)
+  const deepLinkSectionHandled = useRef(false)
+
+  useEffect(() => {
+    if (!stageConfigOpen) return
+    function onClickOutside(e) {
+      if (stageConfigRef.current && !stageConfigRef.current.contains(e.target)) setStageConfigOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [stageConfigOpen])
 
   // Deep-link params — set by Rex's search results (and shareable in
   // general): ?stage= selects a stage, ?section=resources|documents jumps
@@ -97,10 +113,14 @@ function ProjectDetailPageInner() {
     return unsub
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Runs once per page load, not on every `project` update — otherwise any
+  // later write (e.g. addStage's setProject) would re-fire this and pop the
+  // Resources/Documents modal back open even after the user closed it.
   useEffect(() => {
-    if (sectionParam !== 'documents') return
-    const el = document.getElementById('documents-panel')
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (deepLinkSectionHandled.current || !project) return
+    deepLinkSectionHandled.current = true
+    if (sectionParam === 'resources') setResourcesOpen(true)
+    if (sectionParam === 'documents') setDocumentsOpen(true)
   }, [sectionParam, project])
 
   useEffect(() => {
@@ -152,7 +172,7 @@ function ProjectDetailPageInner() {
   const { library: priorityLibrary } = usePriorityLibrary(project?.companyId, access.canManage)
   const { columns: kanbanColumns } = useKanbanColumns(project?.companyId, access.canManage)
   const { library: featureLibrary } = useFeatureVisibility(project?.companyId, access.canManage)
-  const { assignees } = useProjectTeam(project?.pmId)
+  const { assignees } = useProjectTeam(project?.pmId, project?.companyId)
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login')
@@ -377,8 +397,12 @@ function ProjectDetailPageInner() {
 
   return (
     <div className="min-h-screen page-fade">
-      <TopNav />
-      <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+      <ProjectSideBar
+        onOpenResources={() => setResourcesOpen(true)}
+        onOpenDocuments={() => setDocumentsOpen(true)}
+        onOpenMom={() => { setMomStartInAdd(false); setMomOpen(true) }}
+      />
+      <main className="max-w-[1440px] mx-auto pl-16 pr-2 sm:pr-3 lg:pr-4 py-6 lg:py-8">
         <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
           <div>
             <h1 className="font-display text-[28px] sm:text-[36px] leading-[1.2] font-bold text-ink tracking-tight">{project.name}</h1>
@@ -407,42 +431,9 @@ function ProjectDetailPageInner() {
           )}
         </div>
 
-        <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-6 mb-6">
-          <div className="flex items-center justify-between mb-2 text-xs">
-            <span className="text-slate font-semibold uppercase tracking-wide">{doneStages} of {stages.length} stages done</span>
-            <span className="text-progress font-bold">{progressPct}%</span>
-          </div>
-          <ProgressBar pct={progressPct} className="h-2 mb-5" />
-
-          <RoadmapTimeline stages={stages} activeStageId={activeStage?.id} onSelectStage={(s) => setActiveStageId(s.id)} library={effectiveLibrary} orientation="horizontal" />
-
-          <div className="flex items-center gap-2 mt-5 flex-wrap">
-            {canManage && (
-              <button
-                onClick={addStage}
-                className="flex items-center gap-2 text-sm font-semibold text-ink px-4 py-2 rounded-lg bg-paper border border-line hover:border-ink/30 transition-colors"
-              >
-                + Add stage
-              </button>
-            )}
-            {canManage && activeStage && (
-              <>
-                <button onClick={() => moveStage(activeStage.id, -1)} className="text-sm font-semibold text-slate px-4 py-2 rounded-lg border border-line hover:border-ink/30 hover:text-ink transition-colors">
-                  ← Move
-                </button>
-                <button onClick={() => moveStage(activeStage.id, 1)} className="text-sm font-semibold text-slate px-4 py-2 rounded-lg border border-line hover:border-ink/30 hover:text-ink transition-colors">
-                  Move →
-                </button>
-                <button onClick={() => removeStage(activeStage.id)} className="text-sm font-semibold text-coral px-4 py-2 rounded-lg border border-coral-light hover:bg-coral-light transition-colors">
-                  Remove stage
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-6 mb-6">
+        <div className="bg-surface/90 backdrop-blur border border-line rounded-card shadow-card p-4 mb-4">
           <StagePanel
+            bare
             stage={activeStage}
             canManage={canManage}
             currentUser={currentUser}
@@ -453,6 +444,55 @@ function ProjectDetailPageInner() {
             maxStatuses={MAX_PROJECT_STATUSES}
           />
 
+          <div className="flex items-center justify-between mb-1.5 text-xs">
+            <span className="text-slate font-semibold uppercase tracking-wide">{doneStages} of {stages.length} stages done</span>
+            <span className="text-progress font-bold">{progressPct}%</span>
+          </div>
+          <ProgressBar pct={progressPct} className="h-1.5 mb-3" />
+
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <RoadmapTimeline stages={stages} activeStageId={activeStage?.id} onSelectStage={(s) => setActiveStageId(s.id)} library={effectiveLibrary} orientation="horizontal" />
+            </div>
+
+            {canManage && (
+              <div className="relative flex-shrink-0" ref={stageConfigRef}>
+                <button
+                  onClick={() => setStageConfigOpen((v) => !v)}
+                  title="Stage actions"
+                  className="w-9 h-9 rounded-lg flex items-center justify-center text-slate border border-line hover:border-ink/30 hover:text-ink transition-colors"
+                >
+                  <Settings className="w-4 h-4" strokeWidth={1.75} />
+                </button>
+                {stageConfigOpen && (
+                  <div className="absolute z-20 top-0 right-full mr-2 flex items-center gap-2 flex-nowrap bg-surface border border-line rounded-card shadow-card p-3">
+                    <button
+                      onClick={addStage}
+                      className="flex items-center gap-2 text-sm font-semibold text-ink px-4 py-2 rounded-lg bg-paper border border-line hover:border-ink/30 transition-colors whitespace-nowrap"
+                    >
+                      + Add stage
+                    </button>
+                    {activeStage && (
+                      <>
+                        <button onClick={() => moveStage(activeStage.id, -1)} className="text-sm font-semibold text-slate px-4 py-2 rounded-lg border border-line hover:border-ink/30 hover:text-ink transition-colors whitespace-nowrap">
+                          ← Move
+                        </button>
+                        <button onClick={() => moveStage(activeStage.id, 1)} className="text-sm font-semibold text-slate px-4 py-2 rounded-lg border border-line hover:border-ink/30 hover:text-ink transition-colors whitespace-nowrap">
+                          Move →
+                        </button>
+                        <button onClick={() => removeStage(activeStage.id)} className="text-sm font-semibold text-coral px-4 py-2 rounded-lg border border-coral-light hover:bg-coral-light transition-colors whitespace-nowrap">
+                          Remove stage
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-6 mb-6">
           {sprintPlannerVisible && activeStage && (
             <KanbanBoard
               tasks={activeStageTasks}
@@ -465,59 +505,51 @@ function ProjectDetailPageInner() {
               onOpenTask={(t) => setOpenTaskId(t.id)}
               onCreateTask={async (columnId) => setOpenTaskId(await createTask(activeStage.id, null, columnId))}
               onMoveTask={moveTask}
+              teamUpdates={teamUpdates}
+              canPostUpdate={canPostUpdate}
+              currentUser={currentUser}
+              onPostUpdate={postTeamUpdate}
+              onEditUpdate={editTeamUpdate}
+              onDeleteUpdate={deleteTeamUpdate}
+              stages={stages}
             />
           )}
 
-          <CollapsibleSection icon={ClipboardList} title="Requirements & Credentials" defaultOpen={false}>
-            <ResourcesPanel
-              resources={project.resources}
-              onChange={updateResources}
-              canManage={canManage}
-              logAction={logAction}
-              autoOpen={sectionParam === 'resources'}
-              focusItemId={resourceItemParam}
-            />
-          </CollapsibleSection>
-
-          <div id="documents-panel">
-            <CollapsibleSection icon={FileText} title="Documents" defaultOpen={sectionParam === 'documents'}>
-              <DocumentsPanel documents={project.documents} editable={canManage} onChange={updateDocuments} logAction={logAction} />
-            </CollapsibleSection>
-          </div>
-
-          <CollapsibleSection icon={ClipboardList} title="MOM" defaultOpen={false}>
-            <div className="h-[400px] flex flex-col">
-              <MomPanel
-                entries={activeMomEntries}
-                canManage={canManage}
-                currentUser={currentUser}
-                onCreate={(draft) => createMom(activeStage.id, draft)}
-                onUpdate={updateMom}
-                onDelete={deleteMom}
-                onApprove={approveMom}
-                onSubmit={(momId) => updateMom(momId, { status: MOM_STATUS.PENDING })}
-              />
-            </div>
-          </CollapsibleSection>
-
-          <CollapsibleSection icon={MessageSquare} title="Team Updates" defaultOpen={false}>
-            <TeamUpdatesPanel
-              updates={teamUpdates}
-              canPost={canPostUpdate}
-              currentUser={currentUser}
-              onPost={postTeamUpdate}
-              onEdit={editTeamUpdate}
-              onDelete={deleteTeamUpdate}
-              stages={stages}
-              bare
-            />
-          </CollapsibleSection>
-
-          <CollapsibleSection icon={History} title="Audit Log" defaultOpen={false}>
+          <CollapsibleSection icon={History} title="Audit Log" defaultOpen>
             <AuditLogPanel entries={auditLog} bare />
           </CollapsibleSection>
         </div>
       </main>
+
+      <Modal open={resourcesOpen} onClose={() => setResourcesOpen(false)} icon={ClipboardList} title="Project Resources & Credentials">
+        <ResourcesPanel
+          resources={project.resources}
+          onChange={updateResources}
+          canManage={canManage}
+          logAction={logAction}
+          focusItemId={resourceItemParam}
+        />
+      </Modal>
+
+      <Modal open={documentsOpen} onClose={() => setDocumentsOpen(false)} icon={FileText} title="Documents">
+        <DocumentsPanel documents={project.documents} editable={canManage} onChange={updateDocuments} logAction={logAction} />
+      </Modal>
+
+      <Modal open={momOpen} onClose={() => setMomOpen(false)} icon={ClipboardList} title="Minutes of Meeting">
+        <div className="h-[60vh] flex flex-col">
+          <MomPanel
+            entries={activeMomEntries}
+            canManage={canManage}
+            currentUser={currentUser}
+            onCreate={(draft) => createMom(activeStage.id, draft)}
+            onUpdate={updateMom}
+            onDelete={deleteMom}
+            onApprove={approveMom}
+            onSubmit={(momId) => updateMom(momId, { status: MOM_STATUS.PENDING })}
+            startInAdd={momStartInAdd}
+          />
+        </div>
+      </Modal>
 
       {openTask && (
         <TaskDetailModal

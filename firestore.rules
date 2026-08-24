@@ -13,9 +13,14 @@ service cloud.firestore {
 
     // --- users ---
     match /users/{uid} {
+      // The companyId branch covers get()-by-id reads. It can't validate the
+      // PM's team-roster query (where pmId == caller uid) — Firestore denies
+      // a list query outright unless the rule is provably satisfied by the
+      // query's own filters, so that query needs its own explicit branch.
       allow read: if signedIn() && (
         request.auth.uid == uid ||
-        resource.data.companyId == me().companyId
+        resource.data.companyId == me().companyId ||
+        resource.data.pmId == request.auth.uid
       );
       // Self-creation only happens for the Admin signup flow (role must be 'admin').
       // PM/Client accounts are created server-side via the Admin SDK, which bypasses rules.
@@ -86,10 +91,18 @@ service cloud.firestore {
 
     // --- projects ---
     match /projects/{projectId} {
+      // team_member's own branch is required, not just implied by the
+      // companyId branch: app/team/page.js queries by pmId == the team
+      // member's own pmId field, which a list query can't validate against
+      // a companyId-based rule (Firestore needs the exact filtered field to
+      // appear in a rule branch). The "update" rule below already has this
+      // branch — read was missing it, so a team member's dashboard could
+      // never actually load its project list.
       allow read: if signedIn() && (
         me().companyId == resource.data.companyId ||
         request.auth.uid == resource.data.pmId ||
-        request.auth.uid == resource.data.clientId
+        request.auth.uid == resource.data.clientId ||
+        (me().role == 'team_member' && me().pmId == resource.data.pmId)
       );
       allow create: if signedIn() && (
         (me().role == 'admin' && me().companyId == request.resource.data.companyId) ||
