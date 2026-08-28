@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import ProjectSideBar from '@/components/ProjectSideBar'
 import RoadmapTimeline from '@/components/RoadmapTimeline'
 import StagePanel, { MomPanel } from '@/components/StagePanel'
+import InvoicesPanel from '@/components/InvoicesPanel'
 import KanbanBoard from '@/components/KanbanBoard'
 import TaskDetailModal from '@/components/TaskDetailModal'
 import AuditLogPanel from '@/components/AuditLogPanel'
@@ -492,6 +493,19 @@ function ProjectDetailPageInner() {
             )}
           </div>
         </div>
+
+        {activeStage && (
+          <div className="mb-4">
+            <InvoicesPanel
+              invoices={activeStage.invoices}
+              canManage={canManage}
+              onChange={(invoices) => handleStageChange({ ...activeStage, invoices })}
+              logAction={logAction}
+              stageName={activeStage.name}
+              projectId={id}
+            />
+          </div>
+        )}
 
         <div className="flex flex-col gap-6 mb-6">
           {sprintPlannerVisible && activeStage && (
