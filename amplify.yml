@@ -6,7 +6,7 @@ frontend:
         - npm ci
     build:
       commands:
-        - env | grep -e FIREBASE_ADMIN_ -e GEMINI_API_KEY -e NEXT_PUBLIC_ >> .env.production
+        - env | grep -e FIREBASE_ADMIN_ -e GEMINI_API_KEY -e CLOUDINARY_ -e NEXT_PUBLIC_ >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next

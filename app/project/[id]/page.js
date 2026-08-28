@@ -442,6 +442,7 @@ function ProjectDetailPageInner() {
             statusOptions={statusOptions}
             onAddStatus={addStatus}
             maxStatuses={MAX_PROJECT_STATUSES}
+            projectId={id}
           />
 
           <div className="flex items-center justify-between mb-1.5 text-xs">

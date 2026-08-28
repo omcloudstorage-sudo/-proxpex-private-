@@ -1,14 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { Receipt, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Receipt, Plus, Pencil, Trash2, Check, X, Upload, FileText } from 'lucide-react'
 import { newInvoice, formatCurrency, isOverdue, INVOICE_STATUS } from '@/lib/invoices'
 import { AUDIT_ACTIONS } from '@/lib/auditLog'
+import { callAdminApi, callAdminApiForm } from '@/lib/adminApi'
 
-export default function InvoicesPanel({ invoices, canManage, onChange, logAction, stageName }) {
+export default function InvoicesPanel({ invoices, canManage, onChange, logAction, stageName, projectId }) {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState(null)
+  const [uploadingId, setUploadingId] = useState(null)
 
   const list = invoices || []
   const billed = list.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
@@ -48,6 +50,42 @@ export default function InvoicesPanel({ invoices, canManage, onChange, logAction
   function removeInvoice(invoice) {
     onChange(list.filter((inv) => inv.id !== invoice.id))
     logAction?.(AUDIT_ACTIONS.INVOICE_REMOVED, `Removed invoice "${invoice.label}" from "${stageName}"`)
+    if (invoice.attachmentPublicId) {
+      callAdminApi('/api/delete-invoice-pdf', { projectId, publicId: invoice.attachmentPublicId }).catch(() => {})
+    }
+  }
+
+  async function uploadAttachment(invoice, file) {
+    if (!file) return
+    setUploadingId(invoice.id)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('projectId', projectId)
+      if (invoice.attachmentPublicId) formData.append('previousPublicId', invoice.attachmentPublicId)
+
+      const data = await callAdminApiForm('/api/upload-invoice-pdf', formData)
+      const updated = { ...invoice, attachmentUrl: data.url, attachmentPublicId: data.publicId, attachmentFilename: data.filename }
+      onChange(list.map((inv) => (inv.id === invoice.id ? updated : inv)))
+      logAction?.(
+        AUDIT_ACTIONS.INVOICE_ATTACHMENT_UPLOADED,
+        `${invoice.attachmentUrl ? 'Replaced' : 'Uploaded'} PDF for invoice "${invoice.label}" on "${stageName}"`
+      )
+    } catch (err) {
+      alert(err.message || 'Failed to upload PDF.')
+    } finally {
+      setUploadingId(null)
+    }
+  }
+
+  function removeAttachment(invoice) {
+    const publicId = invoice.attachmentPublicId
+    const updated = { ...invoice, attachmentUrl: null, attachmentPublicId: null, attachmentFilename: null }
+    onChange(list.map((inv) => (inv.id === invoice.id ? updated : inv)))
+    logAction?.(AUDIT_ACTIONS.INVOICE_ATTACHMENT_REMOVED, `Removed PDF from invoice "${invoice.label}" on "${stageName}"`)
+    if (publicId) {
+      callAdminApi('/api/delete-invoice-pdf', { projectId, publicId }).catch(() => {})
+    }
   }
 
   return (
@@ -91,6 +129,13 @@ export default function InvoicesPanel({ invoices, canManage, onChange, logAction
                 <div className="min-w-0">
                   <div className="font-medium text-ink truncate">{invoice.label}</div>
                   {invoice.dueDate && <div className="text-xs text-slate-light mt-0.5">Due {invoice.dueDate}</div>}
+                  <InvoiceAttachment
+                    invoice={invoice}
+                    canManage={canManage}
+                    uploading={uploadingId === invoice.id}
+                    onSelectFile={(file) => uploadAttachment(invoice, file)}
+                    onRemove={() => removeAttachment(invoice)}
+                  />
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className="font-mono text-ink">{formatCurrency(invoice.amount)}</span>
@@ -106,6 +151,64 @@ export default function InvoicesPanel({ invoices, canManage, onChange, logAction
             )
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+function InvoiceAttachment({ invoice, canManage, uploading, onSelectFile, onRemove }) {
+  const inputId = `invoice-pdf-${invoice.id}`
+
+  if (!canManage) {
+    if (!invoice.attachmentUrl) return null
+    return (
+      <a
+        href={invoice.attachmentUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-1 text-signal hover:underline text-xs mt-1 min-w-0"
+      >
+        <FileText className="w-3 h-3 flex-shrink-0" strokeWidth={2} />
+        <span className="truncate">{invoice.attachmentFilename || 'View PDF'}</span>
+      </a>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2.5 mt-1 text-xs min-w-0">
+      {invoice.attachmentUrl && (
+        <a
+          href={invoice.attachmentUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 text-signal hover:underline min-w-0"
+        >
+          <FileText className="w-3 h-3 flex-shrink-0" strokeWidth={2} />
+          <span className="truncate">{invoice.attachmentFilename || 'View PDF'}</span>
+        </a>
+      )}
+      <label
+        htmlFor={inputId}
+        className={`flex items-center gap-1 flex-shrink-0 ${uploading ? 'text-slate-light' : 'text-slate-light hover:text-signal cursor-pointer'}`}
+      >
+        <Upload className="w-3 h-3" strokeWidth={2} />
+        {uploading ? 'Uploading…' : invoice.attachmentUrl ? 'Replace' : 'Upload PDF'}
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        disabled={uploading}
+        onChange={(e) => {
+          onSelectFile(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+      {invoice.attachmentUrl && (
+        <button onClick={onRemove} title="Remove PDF" className="text-slate-light hover:text-coral flex-shrink-0">
+          <X className="w-3 h-3" strokeWidth={2} />
+        </button>
       )}
     </div>
   )

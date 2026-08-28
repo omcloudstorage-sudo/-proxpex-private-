@@ -10,10 +10,6 @@ import EntryModal from '@/components/EntryModal'
 import PulseDot from '@/components/PulseDot'
 import InvoicesPanel from '@/components/InvoicesPanel'
 
-// Invoices UI is paused company-wide until real payment processing (Stripe)
-// ships in a later round. Data/logic stays intact — flip this back on then.
-const INVOICES_UI_ENABLED = false
-
 // `bare` drops the outer card chrome (and the "select a stage" empty-state
 // card) so the parent — the stage-tracker card on the project page — can
 // render this content inline instead of as its own separate section.
@@ -26,6 +22,7 @@ export default function StagePanel({
   statusOptions,
   onAddStatus,
   maxStatuses,
+  projectId,
   bare = false,
 }) {
   const [local, setLocal] = useState(stage ? normalizeStage(stage) : null)
@@ -214,15 +211,14 @@ export default function StagePanel({
         {inner}
       </div>
 
-      {INVOICES_UI_ENABLED && (
-        <InvoicesPanel
-          invoices={local.invoices}
-          canManage={canManage}
-          onChange={(invoices) => commit({ invoices })}
-          logAction={logAction}
-          stageName={local.name}
-        />
-      )}
+      <InvoicesPanel
+        invoices={local.invoices}
+        canManage={canManage}
+        onChange={(invoices) => commit({ invoices })}
+        logAction={logAction}
+        stageName={local.name}
+        projectId={projectId}
+      />
     </div>
   )
 }
