@@ -6,7 +6,7 @@ import {
   doc, onSnapshot, updateDoc, collection, query, where, orderBy, limit,
   addDoc, deleteDoc, getDocs, serverTimestamp,
 } from 'firebase/firestore'
-import { ClipboardList, FileText, History, Settings } from 'lucide-react'
+import { ClipboardList, FileText, History, Settings, Receipt } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import ProjectSideBar from '@/components/ProjectSideBar'
@@ -68,6 +68,7 @@ function ProjectDetailPageInner() {
   const [resourcesOpen, setResourcesOpen] = useState(false)
   const [documentsOpen, setDocumentsOpen] = useState(false)
   const [momOpen, setMomOpen] = useState(false)
+  const [invoicesOpen, setInvoicesOpen] = useState(false)
   const [momStartInAdd, setMomStartInAdd] = useState(false)
   const [stageConfigOpen, setStageConfigOpen] = useState(false)
   const stageConfigRef = useRef(null)
@@ -402,6 +403,8 @@ function ProjectDetailPageInner() {
         onOpenResources={() => setResourcesOpen(true)}
         onOpenDocuments={() => setDocumentsOpen(true)}
         onOpenMom={() => { setMomStartInAdd(false); setMomOpen(true) }}
+        documents={project.documents}
+        projectId={id}
       />
       <main className="max-w-[1440px] mx-auto pl-16 pr-2 sm:pr-3 lg:pr-4 py-6 lg:py-8">
         <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
@@ -452,9 +455,28 @@ function ProjectDetailPageInner() {
           </div>
           <ProgressBar pct={progressPct} className="h-1.5 mb-3" />
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
-              <RoadmapTimeline stages={stages} activeStageId={activeStage?.id} onSelectStage={(s) => setActiveStageId(s.id)} library={effectiveLibrary} orientation="horizontal" />
+              <RoadmapTimeline
+                stages={stages}
+                activeStageId={activeStage?.id}
+                onSelectStage={(s) => { setActiveStageId(s.id); setInvoicesOpen(false) }}
+                library={effectiveLibrary}
+                orientation="horizontal"
+                belowActive={() => (
+                  <button
+                    onClick={() => setInvoicesOpen((v) => !v)}
+                    title="Invoices for this stage"
+                    className={[
+                      'w-11 flex flex-col items-center gap-0.5 py-1.5 rounded-lg border transition-colors flex-shrink-0',
+                      invoicesOpen ? 'border-signal text-signal bg-signal/10' : 'border-line text-slate hover:border-signal hover:text-ink',
+                    ].join(' ')}
+                  >
+                    <Receipt className="w-4 h-4" strokeWidth={1.75} />
+                    <span className="text-[9px] font-semibold uppercase tracking-wide leading-none">Inv</span>
+                  </button>
+                )}
+              />
             </div>
 
             {canManage && (
@@ -494,7 +516,7 @@ function ProjectDetailPageInner() {
           </div>
         </div>
 
-        {activeStage && (
+        {activeStage && invoicesOpen && (
           <div className="mb-4">
             <InvoicesPanel
               invoices={activeStage.invoices}
@@ -547,7 +569,7 @@ function ProjectDetailPageInner() {
       </Modal>
 
       <Modal open={documentsOpen} onClose={() => setDocumentsOpen(false)} icon={FileText} title="Documents">
-        <DocumentsPanel documents={project.documents} editable={canManage} onChange={updateDocuments} logAction={logAction} />
+        <DocumentsPanel documents={project.documents} editable={canManage} onChange={updateDocuments} logAction={logAction} projectId={id} />
       </Modal>
 
       <Modal open={momOpen} onClose={() => setMomOpen(false)} icon={ClipboardList} title="Minutes of Meeting">

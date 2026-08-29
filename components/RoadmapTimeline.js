@@ -7,13 +7,20 @@ import PulseDot from '@/components/PulseDot'
 // orientation="horizontal" is used by the project detail page (the stage
 // bar now runs across the top of the page); "vertical" (default) keeps the
 // original left-column list used on the client/team dashboard widgets.
-export default function RoadmapTimeline({ stages, activeStageId, onSelectStage, library, orientation = 'vertical' }) {
+// `belowActive(stage)` — optional, horizontal orientation only — renders an
+// accessory (a circuit-trace connector + button, currently used for the
+// per-stage Invoices entry point) directly beneath the currently-selected
+// stage's marker. It's slotted into that stage's own column (not
+// absolutely positioned against the scroll container) so it scrolls with
+// its marker and never needs pixel math to stay aligned when the active
+// stage changes or the row scrolls.
+export default function RoadmapTimeline({ stages, activeStageId, onSelectStage, library, orientation = 'vertical', belowActive }) {
   const sorted = [...stages].sort((a, b) => a.order - b.order)
 
   if (orientation === 'horizontal') {
     return (
       <div className="w-full overflow-x-auto">
-        <div className="flex items-center gap-3 min-w-max pb-1">
+        <div className="flex items-start gap-3 min-w-max pb-1">
           {sorted.map((stage, i) => {
             const isLast = i === sorted.length - 1
             const isActive = stage.id === activeStageId
@@ -23,48 +30,59 @@ export default function RoadmapTimeline({ stages, activeStageId, onSelectStage, 
             const display = getStatusDisplay(stage.status, library)
 
             return (
-              <div key={stage.id} className="flex items-center gap-3">
-                <button
-                  onClick={() => onSelectStage?.(stage)}
-                  className={[
-                    'flex items-center gap-3 text-left group rounded-xl px-3 py-2 transition-all duration-200 border flex-shrink-0',
-                    isActive ? 'bg-signal/10 border-signal/30 shadow-card' : 'border-transparent',
-                  ].filter(Boolean).join(' ')}
-                >
-                  <div
+              <div key={stage.id} className="flex items-start gap-3">
+                <div className="flex flex-col items-center flex-shrink-0">
+                  <button
+                    onClick={() => onSelectStage?.(stage)}
                     className={[
-                      'w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 border-2 shadow-card transition-all duration-200 ease-out',
-                      isDone && 'bg-progress border-white text-white',
-                      isCurrent && !isDone && 'bg-surface text-signal glow-pulse',
-                      !isDone && !isCurrent && 'bg-surface border-line text-slate',
-                      isActive && 'scale-[1.14] ring-[3px] ring-offset-2 ring-offset-paper ring-signal/55 shadow-glow',
+                      'flex items-center gap-3 text-left group rounded-xl px-3 py-2 min-h-[64px] transition-all duration-200 border flex-shrink-0',
+                      isActive ? 'bg-signal/10 border-signal/30 shadow-card' : 'border-transparent',
                     ].filter(Boolean).join(' ')}
-                    style={isCurrent && !isDone ? { borderColor: display.color, color: display.color } : undefined}
                   >
-                    {isDone ? <Check className="w-[18px] h-[18px]" strokeWidth={2.5} /> : <span className="text-base">{i + 1}</span>}
-                  </div>
-                  <div className="flex flex-col items-start gap-1 min-w-0">
-                    <span
+                    <div
                       className={[
-                        'text-sm leading-snug truncate transition-all duration-200 max-w-[10rem]',
-                        isActive ? 'font-bold text-ink' : 'font-semibold',
-                        !isActive && (isDone ? 'text-progress' : 'text-slate'),
+                        'w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 border-2 shadow-card transition-all duration-200 ease-out',
+                        isDone && 'bg-progress border-white text-white',
+                        isCurrent && !isDone && 'bg-surface text-signal glow-pulse',
+                        !isDone && !isCurrent && 'bg-surface border-line text-slate',
+                        isActive && 'scale-[1.14] ring-[3px] ring-offset-2 ring-offset-paper ring-signal/55 shadow-glow',
                       ].filter(Boolean).join(' ')}
+                      style={isCurrent && !isDone ? { borderColor: display.color, color: display.color } : undefined}
                     >
-                      {stage.name}
-                    </span>
-                    {!isDone && (
+                      {isDone ? <Check className="w-[18px] h-[18px]" strokeWidth={2.5} /> : <span className="text-base">{i + 1}</span>}
+                    </div>
+                    <div className="flex flex-col items-start gap-1 min-w-0">
                       <span
-                        className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
-                        style={{ background: `${display.color}1a`, color: display.color }}
+                        className={[
+                          'text-sm leading-snug truncate transition-all duration-200 max-w-[10rem]',
+                          isActive ? 'font-bold text-ink' : 'font-semibold',
+                          !isActive && (isDone ? 'text-progress' : 'text-slate'),
+                        ].filter(Boolean).join(' ')}
                       >
-                        {isCurrent && <PulseDot color={display.color} />}
-                        {display.name}
+                        {stage.name}
                       </span>
-                    )}
-                  </div>
-                </button>
-                {!isLast && <div className={['w-8 h-0.5 flex-shrink-0', isDone ? 'bg-progress' : 'bg-line'].join(' ')} />}
+                      {!isDone && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: `${display.color}1a`, color: display.color }}
+                        >
+                          {isCurrent && <PulseDot color={display.color} />}
+                          {display.name}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {isActive && belowActive && (
+                    <div className="flex flex-col items-center pt-0.5">
+                      <span className="w-px h-2.5 bg-signal/50" />
+                      <span className="w-[5px] h-[5px] rounded-full bg-signal/70" />
+                      <span className="w-px h-2.5 bg-signal/50" />
+                      {belowActive(stage)}
+                    </div>
+                  )}
+                </div>
+                {!isLast && <div className={['w-8 h-0.5 flex-shrink-0 mt-8', isDone ? 'bg-progress' : 'bg-line'].join(' ')} />}
               </div>
             )
           })}

@@ -6,6 +6,8 @@ import { ClipboardList, FileText, NotebookText, Palette, LogOut } from 'lucide-r
 import { useAuth } from '@/contexts/AuthContext'
 import Logo from '@/components/Logo'
 import AppearanceControls from '@/components/AppearanceControls'
+import { callAdminApiBlob } from '@/lib/adminApi'
+import { isUploadDocument } from '@/lib/documents'
 
 const ROLE_HOME = { admin: '/admin', pm: '/pm', client: '/client', team_member: '/team' }
 const ROLE_LABEL = { admin: 'Admin', pm: 'Project Manager', client: 'Client', team_member: 'Team Member' }
@@ -14,10 +16,11 @@ const ROLE_LABEL = { admin: 'Admin', pm: 'Project Manager', client: 'Client', te
 // vertical rail (see SIDEBAR_WIDTH_CLASS below, kept in sync with the
 // project page's left offset). Also hosts the Resources/Documents/MOM
 // triggers that used to be inline cards on the page.
-export default function ProjectSideBar({ onOpenResources, onOpenDocuments, onOpenMom }) {
+export default function ProjectSideBar({ onOpenResources, onOpenDocuments, onOpenMom, documents, projectId }) {
   const { profile, signOut } = useAuth()
   const [appearanceOpen, setAppearanceOpen] = useState(false)
   const appearanceRef = useRef(null)
+  const [thumbUrl, setThumbUrl] = useState(null)
 
   useEffect(() => {
     if (!appearanceOpen) return
@@ -28,6 +31,29 @@ export default function ProjectSideBar({ onOpenResources, onOpenDocuments, onOpe
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [appearanceOpen])
 
+  // Most recently uploaded PDF's first-page thumbnail, shown on the Docs
+  // button instead of the generic file icon — see app/api/document-thumbnail.
+  const latestUpload = [...(documents || [])].filter(isUploadDocument).sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0))[0]
+
+  useEffect(() => {
+    let revoke = null
+    let cancelled = false
+    setThumbUrl(null)
+    if (!latestUpload?.publicId || !projectId) return
+    callAdminApiBlob('/api/document-thumbnail', { projectId, publicId: latestUpload.publicId })
+      .then((blob) => {
+        if (cancelled) return
+        const url = URL.createObjectURL(blob)
+        revoke = url
+        setThumbUrl(url)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      if (revoke) URL.revokeObjectURL(revoke)
+    }
+  }, [latestUpload?.publicId, projectId])
+
   return (
     <aside className="fixed left-0 top-0 h-screen w-16 bg-surface/90 backdrop-blur border-r border-line flex flex-col items-center py-4 gap-2 z-20">
       <Link href={profile ? ROLE_HOME[profile.role] : '/'} title="Proxpex" className="mb-2 flex-shrink-0">
@@ -37,7 +63,7 @@ export default function ProjectSideBar({ onOpenResources, onOpenDocuments, onOpe
       <div className="w-8 border-t border-line flex-shrink-0" />
 
       <LabeledSideBarButton icon={ClipboardList} label="Res" title="Resources & Credentials" onClick={onOpenResources} />
-      <LabeledSideBarButton icon={FileText} label="Docs" title="Documents" onClick={onOpenDocuments} />
+      <LabeledSideBarButton icon={FileText} label="Docs" title="Documents" onClick={onOpenDocuments} thumbUrl={thumbUrl} />
       <LabeledSideBarButton icon={NotebookText} label="MOM" title="Minutes of Meeting" onClick={onOpenMom} />
 
       <div className="flex-1" />
@@ -79,14 +105,20 @@ function SideBarButton({ icon: Icon, title, onClick }) {
 
 // Resources/Documents/MOM triggers — a visible bordered box with a small
 // label under the icon, distinct from the plain icon-only buttons above.
-function LabeledSideBarButton({ icon: Icon, label, title, onClick }) {
+// `thumbUrl` (Documents only) swaps the generic icon for the most recently
+// uploaded PDF's first-page thumbnail once it's loaded.
+function LabeledSideBarButton({ icon: Icon, label, title, onClick, thumbUrl }) {
   return (
     <button
       onClick={onClick}
       title={title}
-      className="w-11 flex flex-col items-center gap-0.5 py-1.5 rounded-lg border border-line text-slate hover:border-signal hover:text-ink transition-colors flex-shrink-0"
+      className="w-11 flex flex-col items-center gap-0.5 py-1.5 rounded-lg border border-line text-slate hover:border-signal hover:text-ink transition-colors flex-shrink-0 overflow-hidden"
     >
-      <Icon className="w-4 h-4" strokeWidth={1.75} />
+      {thumbUrl ? (
+        <img src={thumbUrl} alt="" className="w-6 h-8 object-cover rounded-sm border border-line" />
+      ) : (
+        <Icon className="w-4 h-4" strokeWidth={1.75} />
+      )}
       <span className="text-[9px] font-semibold uppercase tracking-wide leading-none">{label}</span>
     </button>
   )
