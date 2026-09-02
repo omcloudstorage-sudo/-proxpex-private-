@@ -16,13 +16,24 @@ export const metadata = {
 
 // Applies the saved theme/accent before paint, so there's no flash of the
 // wrong theme while ThemeProvider's effect runs on the client.
+//
+// The public marketing pages (/, /rex, /access) are excluded from the
+// accent override on purpose: they're signed-out, public pages, and must
+// always show the real brand blue — never a signed-in visitor's leftover
+// personal accent choice from testing the in-app Appearance picker on the
+// same browser. That's exactly what was causing the marketing site to
+// render coral/red — this is the actual fix, not the token value (which
+// was already correct).
 const THEME_INIT_SCRIPT = `
 (function () {
   try {
+    var isMarketingPage = ['/', '/rex', '/access'].indexOf(window.location.pathname) !== -1;
     var theme = localStorage.getItem('proxpex-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    var accent = localStorage.getItem('proxpex-accent-rgb');
     document.documentElement.classList.toggle('dark', theme === 'dark');
-    if (accent) document.documentElement.style.setProperty('--color-signal', accent);
+    if (!isMarketingPage) {
+      var accent = localStorage.getItem('proxpex-accent-rgb');
+      if (accent) document.documentElement.style.setProperty('--color-signal', accent);
+    }
   } catch (e) {}
 })();
 `

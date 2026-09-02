@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 
 export const ACCENTS = [
-  { key: 'blue', label: 'Blue', rgb: '29 78 216' },
+  { key: 'blue', label: 'Blue', rgb: '47 90 240' },
   { key: 'emerald', label: 'Emerald', rgb: '16 185 129' },
   { key: 'violet', label: 'Violet', rgb: '124 58 237' },
   { key: 'amber', label: 'Amber', rgb: '217 119 6' },
@@ -14,6 +14,11 @@ export const ACCENTS = [
 const THEME_KEY = 'proxpex-theme'
 const ACCENT_KEY = 'proxpex-accent'
 const ACCENT_RGB_KEY = 'proxpex-accent-rgb'
+
+// Public, signed-out pages — always the real brand blue, never a visitor's
+// leftover personal accent from the in-app Appearance picker. See the
+// matching guard in app/layout.js's pre-paint THEME_INIT_SCRIPT.
+const MARKETING_PATHS = ['/', '/rex', '/access']
 
 const ThemeContext = createContext({
   theme: 'light',
@@ -36,8 +41,9 @@ export function ThemeProvider({ children }) {
   const [accent, setAccentState] = useState('blue')
 
   useEffect(() => {
+    const isMarketingPage = MARKETING_PATHS.includes(window.location.pathname)
     const storedTheme = localStorage.getItem(THEME_KEY)
-    const storedAccent = localStorage.getItem(ACCENT_KEY)
+    const storedAccent = isMarketingPage ? null : localStorage.getItem(ACCENT_KEY)
     const theme = storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     const accent = storedAccent || 'blue'
     setThemeState(theme)

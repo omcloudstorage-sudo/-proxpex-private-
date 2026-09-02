@@ -12,7 +12,7 @@
   --color-line: 229 231 235;
 
   /* Accent — swappable via Appearance settings, same hue in both themes */
-  --color-signal: 29 78 216;
+  --color-signal: 47 90 240;
   --color-signal-dark: color-mix(in srgb, rgb(var(--color-signal)) 82%, black);
   --color-signal-light: color-mix(in srgb, rgb(var(--color-signal)) 10%, white);
 
@@ -192,6 +192,10 @@ body {
     animation: none;
   }
 }
+
+/* The hero's persistent horizon-arc glow now lives in HeroHorizon.js
+   (styled-jsx, scoped) — it needs per-instance mouse-tracking CSS custom
+   properties that a shared global class can't cleanly carry. */
 
 /* Ambient "floating embers" backdrop — warm particles drifting slowly
    upward behind all page content, platform-wide. Pure CSS (no canvas, no

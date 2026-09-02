@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore'
-import { Building2, Check, X, Clock } from 'lucide-react'
+import { collection, onSnapshot, doc, updateDoc, getDoc } from 'firebase/firestore'
+import { Building2, Check, X, Clock, KeyRound, Inbox, Pencil } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import RequireRole from '@/components/RequireRole'
 import Logo from '@/components/Logo'
 import EmptyState from '@/components/EmptyState'
+import { setAccessCode } from '@/lib/platformConfig'
 
 export default function OwnerPage() {
   return (
@@ -66,49 +67,57 @@ function OwnerDashboard() {
           <p className="text-slate text-base mt-1">Approve or reject new companies before they can use Proxpex.</p>
         </div>
 
-        {error ? (
-          <p className="text-sm text-coral">{error}</p>
-        ) : companies === null ? (
-          <p className="text-sm text-slate">Loading…</p>
-        ) : (
-          <div className="space-y-10">
-            <Section title="Pending approval" count={pending.length}>
-              {pending.length === 0 ? (
-                <EmptyState icon={Clock} text="No companies waiting for approval." />
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {pending.map((c) => (
-                    <CompanyRow key={c.id} company={c} onApprove={() => setStatus(c.id, 'approved')} onReject={() => setStatus(c.id, 'rejected')} />
-                  ))}
-                </div>
-              )}
-            </Section>
+        <div className="space-y-10">
+          <Section title="Beta access code" count={null}>
+            <AccessCodeCard />
+          </Section>
 
-            <Section title="Approved" count={approved.length}>
-              {approved.length === 0 ? (
-                <EmptyState icon={Building2} text="No approved companies yet." />
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {approved.map((c) => (
-                    <CompanyRow key={c.id} company={c} onReject={() => setStatus(c.id, 'rejected')} />
-                  ))}
-                </div>
-              )}
-            </Section>
+          <BetaRequestsSection />
 
-            <Section title="Rejected" count={rejected.length}>
-              {rejected.length === 0 ? (
-                <EmptyState icon={X} text="No rejected companies." />
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {rejected.map((c) => (
-                    <CompanyRow key={c.id} company={c} onApprove={() => setStatus(c.id, 'approved')} />
-                  ))}
-                </div>
-              )}
-            </Section>
-          </div>
-        )}
+          {error ? (
+            <p className="text-sm text-coral">{error}</p>
+          ) : companies === null ? (
+            <p className="text-sm text-slate">Loading…</p>
+          ) : (
+            <>
+              <Section title="Pending approval" count={pending.length}>
+                {pending.length === 0 ? (
+                  <EmptyState icon={Clock} text="No companies waiting for approval." />
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {pending.map((c) => (
+                      <CompanyRow key={c.id} company={c} onApprove={() => setStatus(c.id, 'approved')} onReject={() => setStatus(c.id, 'rejected')} />
+                    ))}
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Approved" count={approved.length}>
+                {approved.length === 0 ? (
+                  <EmptyState icon={Building2} text="No approved companies yet." />
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {approved.map((c) => (
+                      <CompanyRow key={c.id} company={c} onReject={() => setStatus(c.id, 'rejected')} />
+                    ))}
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Rejected" count={rejected.length}>
+                {rejected.length === 0 ? (
+                  <EmptyState icon={X} text="No rejected companies." />
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {rejected.map((c) => (
+                      <CompanyRow key={c.id} company={c} onApprove={() => setStatus(c.id, 'approved')} />
+                    ))}
+                  </div>
+                )}
+              </Section>
+            </>
+          )}
+        </div>
       </main>
     </div>
   )
@@ -124,10 +133,156 @@ function Section({ title, count, children }) {
   return (
     <section>
       <h2 className="font-display text-xl font-semibold text-ink mb-4">
-        {title} <span className="text-slate-light font-normal text-base">({count})</span>
+        {title} {count !== null && <span className="text-slate-light font-normal text-base">({count})</span>}
       </h2>
       {children}
     </section>
+  )
+}
+
+function AccessCodeCard() {
+  const [code, setCode] = useState(null) // null = loading
+  const [draft, setDraft] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getDoc(doc(db, 'platformConfig', 'access')).then((snap) => {
+      const current = snap.exists() ? snap.data().code || '' : ''
+      setCode(current)
+      setDraft(current)
+    })
+  }, [])
+
+  async function handleSave() {
+    setSaving(true)
+    await setAccessCode(draft)
+    setCode(draft.trim())
+    setSaving(false)
+    setEditing(false)
+  }
+
+  if (code === null) return <p className="text-sm text-slate">Loading…</p>
+
+  return (
+    <div className="bg-surface border border-line rounded-card shadow-card p-5">
+      <div className="flex items-center gap-4">
+        <div className="w-10 h-10 rounded-full bg-signal-light text-signal flex items-center justify-center flex-shrink-0">
+          <KeyRound className="w-4.5 h-4.5" strokeWidth={2.25} />
+        </div>
+        {editing ? (
+          <div className="flex-1 flex items-center gap-2">
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="flex-1 border border-line rounded-full px-4 py-2 text-sm font-mono focus:outline-none focus:border-signal bg-paper"
+              placeholder="Access code"
+              autoFocus
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="text-sm font-semibold text-white bg-signal px-4 py-2 rounded-full hover:bg-signal-dark transition-colors disabled:opacity-60"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-between min-w-0">
+            <div>
+              <div className="text-base font-semibold text-ink font-mono">{code || 'No code set'}</div>
+              <div className="text-sm text-slate">Shared code checked on the public /access page.</div>
+            </div>
+            <button
+              onClick={() => { setDraft(code); setEditing(true) }}
+              className="flex items-center gap-1.5 text-sm font-semibold text-slate px-4 py-2 rounded-full border border-line hover:border-ink/30 hover:text-ink transition-colors flex-shrink-0"
+            >
+              <Pencil className="w-3.5 h-3.5" strokeWidth={2.5} /> {code ? 'Change' : 'Set code'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BetaRequestsSection() {
+  const [requests, setRequests] = useState(null)
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'betaRequests'), (snap) => {
+      setRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    })
+    return unsub
+  }, [])
+
+  async function markReviewed(id, reviewed) {
+    await updateDoc(doc(db, 'betaRequests', id), { reviewed })
+  }
+
+  const pending = (requests || []).filter((r) => !r.reviewed).sort(byCreatedAtDesc)
+  const reviewed = (requests || []).filter((r) => r.reviewed).sort(byCreatedAtDesc)
+
+  return (
+    <>
+      <Section title="Beta requests" count={pending.length}>
+        {requests === null ? (
+          <p className="text-sm text-slate">Loading…</p>
+        ) : pending.length === 0 ? (
+          <EmptyState icon={Inbox} text="No new beta requests." />
+        ) : (
+          <div className="flex flex-col gap-4">
+            {pending.map((r) => (
+              <BetaRequestRow key={r.id} request={r} onReview={() => markReviewed(r.id, true)} />
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {reviewed.length > 0 && (
+        <Section title="Reviewed" count={reviewed.length}>
+          <div className="flex flex-col gap-4">
+            {reviewed.map((r) => (
+              <BetaRequestRow key={r.id} request={r} onUnreview={() => markReviewed(r.id, false)} />
+            ))}
+          </div>
+        </Section>
+      )}
+    </>
+  )
+}
+
+function BetaRequestRow({ request, onReview, onUnreview }) {
+  return (
+    <div className="card-hover bg-surface border border-line rounded-card shadow-card p-5 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-base font-semibold text-ink truncate">{request.name}</div>
+        <div className="text-sm text-slate truncate">
+          {request.email}
+          {request.company && <span className="text-slate-light"> · {request.company}</span>}
+        </div>
+        {request.description && <p className="text-sm text-ink mt-2">{request.description}</p>}
+      </div>
+      <div className="flex-shrink-0">
+        {onReview && (
+          <button
+            onClick={onReview}
+            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-signal px-4 py-2 rounded-full hover:bg-signal-dark transition-colors"
+          >
+            <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Reviewed
+          </button>
+        )}
+        {onUnreview && (
+          <button
+            onClick={onUnreview}
+            className="text-sm font-semibold text-slate px-4 py-2 rounded-full border border-line hover:border-ink/30 hover:text-ink transition-colors"
+          >
+            Unmark
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 

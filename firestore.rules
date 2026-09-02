@@ -89,6 +89,30 @@ service cloud.firestore {
       }
     }
 
+    // --- platformConfig ---
+    // Singleton-style docs holding platform-wide settings (currently just
+    // the shared beta access code, doc id 'access'). Only the Platform
+    // Owner can read or write — the /access page's code check goes through
+    // an API route using the Admin SDK instead of a direct client read, so
+    // this never needs to be publicly readable.
+    match /platformConfig/{configId} {
+      allow read, write: if signedIn() && me().role == 'platform_owner';
+    }
+
+    // --- betaRequests ---
+    // Submitted anonymously from the public /access page's "Request
+    // access" form — no auth yet, so create must stay open to signed-out
+    // visitors. Only the Platform Owner can list/read or update (e.g. mark
+    // reviewed) them afterward.
+    match /betaRequests/{requestId} {
+      allow read: if signedIn() && me().role == 'platform_owner';
+      allow create: if request.resource.data.name is string && request.resource.data.name.size() > 0 &&
+        request.resource.data.email is string && request.resource.data.email.size() > 0 &&
+        request.resource.data.reviewed == false;
+      allow update: if signedIn() && me().role == 'platform_owner';
+      allow delete: if false;
+    }
+
     // --- projects ---
     match /projects/{projectId} {
       // team_member's own branch is required, not just implied by the

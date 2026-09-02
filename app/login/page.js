@@ -118,7 +118,7 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-[46%] relative overflow-hidden bg-[#0F172A] flex-col justify-between p-12">
         <div
           className="pointer-events-none absolute -top-24 -left-24 w-[32rem] h-[32rem] rounded-full opacity-20 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #1D4ED8 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #2F5AF0 0%, transparent 70%)' }}
         />
         <div
           className="pointer-events-none absolute bottom-0 right-0 w-[26rem] h-[26rem] rounded-full opacity-20 blur-3xl"

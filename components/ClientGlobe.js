@@ -139,7 +139,7 @@ export default function ClientGlobe({ markers, focusedId = null, focusedLabel = 
     if (!canvas || !wrap) return
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const signal = readColorVar('--color-signal', [0.114, 0.306, 0.847])
+    const signal = readColorVar('--color-signal', [0.184, 0.353, 0.941])
     const rotation = rotationRef.current
     const drag = dragRef.current
     let raf = null
